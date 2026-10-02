@@ -1,4 +1,3 @@
-
 import { authService } from "../../services/authService";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -7,6 +6,7 @@ import {
   CalendarDays,
   CloudRain,
   Droplets,
+  Image as ImageIcon,
   Leaf,
   MapPin,
   Pencil,
@@ -24,7 +24,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { cultureService } from "../../services/cultureService";
 import { calendrierService } from "../../services/calendrierService";
 import { meteoService } from "../../services/meteoService";
-import { hydriqueService } from "../../services/hydriqueService";
 import { iaService } from "../../services/iaService";
 
 function getCultureName(culture) {
@@ -45,6 +44,15 @@ function getLocalisation(culture) {
   );
 }
 
+function getRegionName(culture, weather) {
+  return (
+    weather?.region ||
+    culture?.region_nom ||
+    culture?.region?.nom ||
+    "Région non renseignée"
+  );
+}
+
 function getFirstName(user) {
   return (
     user?.first_name ||
@@ -54,15 +62,70 @@ function getFirstName(user) {
   );
 }
 
+function formatDate(date) {
+  if (!date) {
+    return "—";
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return date;
+  }
+
+  return parsedDate.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatShortDate(date) {
+  if (!date) {
+    return "—";
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return date;
+  }
+
+  return parsedDate.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatDateRange(dateStart, dateEnd) {
+  if (!dateStart) {
+    return "Date non renseignée";
+  }
+
+  if (!dateEnd || dateStart === dateEnd) {
+    return formatDate(dateStart);
+  }
+
+  return `${formatDate(dateStart)} → ${formatDate(dateEnd)}`;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
 
   const [cultures, setCultures] = useState([]);
   const [selectedCulture, setSelectedCulture] = useState(null);
 
+  /*
+   * SERVICES ACTUELS
+   *
+   * calendar = calendrier agricole
+   * weather = météo régionale
+   *
+   * Le module hydrique est volontairement absent.
+   */
   const [calendar, setCalendar] = useState(null);
   const [weather, setWeather] = useState(null);
-  const [hydric, setHydric] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [servicesLoading, setServicesLoading] = useState(false);
@@ -70,14 +133,27 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState("overview");
 
+  /*
+   * IA
+   */
   const [photo, setPhoto] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  /*
+   * PROFIL
+   */
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
+  /*
+   * Deux références différentes :
+   *
+   * cameraInputRef = appareil photo
+   * fileInputRef = galerie / fichiers
+   */
+  const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const [profile, setProfile] = useState({
@@ -87,6 +163,9 @@ export default function Dashboard() {
     telephone: user?.telephone || "",
   });
 
+  /*
+   * Synchronisation du profil avec l'utilisateur connecté
+   */
   useEffect(() => {
     setProfile({
       first_name: user?.first_name || "",
@@ -96,6 +175,9 @@ export default function Dashboard() {
     });
   }, [user]);
 
+  /*
+   * Chargement des cultures
+   */
   useEffect(() => {
     async function loadCultures() {
       setLoading(true);
@@ -121,75 +203,75 @@ export default function Dashboard() {
     loadCultures();
   }, []);
 
-  // useEffect(() => {
-  //   async function loadCultureServices() {
-  //     if (!selectedCulture?.id) {
-  //       setCalendar(null);
-  //       setWeather(null);
-  //       setHydric(null);
-  //       return;
-  //     }
-
-  //     setServicesLoading(true);
-  //     setError("");
-
-  //     try {
-  //       const [calendarData, weatherData, hydricData] =
-  //         await Promise.all([
-  //           calendrierService.getCalendar(selectedCulture.id),
-  //           meteoService.getWeather(selectedCulture.id),
-  //           hydriqueService.getHydrique(selectedCulture.id),
-  //         ]);
-
-  //       setCalendar(calendarData);
-  //       setWeather(weatherData);
-  //       setHydric(hydricData);
-  //     } catch (err) {
-  //       setError(
-  //         err.message ||
-  //           "Impossible de charger les informations agricoles."
-  //       );
-  //     } finally {
-  //       setServicesLoading(false);
-  //     }
-  //   }
-
-  //   loadCultureServices();
-  // }, [selectedCulture]);
+  /*
+   * Chargement du calendrier + météo
+   *
+   * Le calendrier et la météo sont deux services distincts.
+   *
+   * La météo ne dépend PAS du module hydrique.
+   */
   useEffect(() => {
-  async function loadWeather() {
-    if (!selectedCulture?.id) {
-      setWeather(null);
-      return;
-    }
+    async function loadCultureServices() {
+      if (!selectedCulture?.id) {
+        setCalendar(null);
+        setWeather(null);
+        return;
+      }
 
-    setServicesLoading(true);
-    setError("");
+      setServicesLoading(true);
+      setError("");
 
-    try {
-      const weatherData =
-        await meteoService.getWeather(
-          selectedCulture.id
+      try {
+        const [calendarData, weatherData] =
+          await Promise.all([
+            calendrierService.getCalendar(
+              selectedCulture.id
+            ),
+            meteoService.getWeather(
+              selectedCulture.id
+            ),
+          ]);
+
+        setCalendar(calendarData);
+        setWeather(weatherData);
+      } catch (err) {
+        setError(
+          err.message ||
+            "Impossible de charger les informations de votre culture."
         );
-
-      setWeather(weatherData);
-    } catch (err) {
-      setError(
-        err.message ||
-          "Impossible de charger la météo de votre région."
-      );
-    } finally {
-      setServicesLoading(false);
+      } finally {
+        setServicesLoading(false);
+      }
     }
-  }
 
-  loadWeather();
-}, [selectedCulture]);
+    loadCultureServices();
+  }, [selectedCulture]);
 
+  /*
+   * Nom de la culture sélectionnée
+   */
   const selectedCultureName = useMemo(
-     () => getCultureName(selectedCulture),
+    () => getCultureName(selectedCulture),
     [selectedCulture]
   );
+
+  /*
+   * Prochaine opération provenant directement
+   * du calendrier retourné par le backend.
+   */
+  const nextOperation =
+    calendar?.prochaine_operation || null;
+
+  /*
+   * ============================================================
+   * GESTION PHOTO IA
+   * ============================================================
+   *
+   * Deux possibilités :
+   *
+   * 1. Prendre une photo avec l'appareil photo
+   * 2. Importer une photo existante
+   */
 
   function handlePhotoChange(event) {
     const file = event.target.files?.[0];
@@ -206,6 +288,20 @@ export default function Dashboard() {
     }
 
     setPreviewUrl(URL.createObjectURL(file));
+
+    /*
+     * Permet de sélectionner à nouveau le même fichier
+     * plus tard si nécessaire.
+     */
+    event.target.value = "";
+  }
+
+  function openCamera() {
+    cameraInputRef.current?.click();
+  }
+
+  function openFilePicker() {
+    fileInputRef.current?.click();
   }
 
   async function analyzePhoto() {
@@ -245,65 +341,58 @@ export default function Dashboard() {
     }
   }
 
-  // Ancienne version codeeeee
-  // function saveProfile(event) {
-  //   event.preventDefault();
+  /*
+   * ============================================================
+   * MODIFICATION DU PROFIL
+   * ============================================================
+   */
 
-  //   /*
-  //    * Interface prête.
-  //    * La persistance réelle sera branchée sur l'endpoint
-  //    * PATCH du profil lorsque celui-ci sera exposé côté backend.
-  //    */
-
-  //   setProfileSaved(true);
-  //   setEditingProfile(false);
-
-  //   setTimeout(() => {
-  //     setProfileSaved(false);
-  //   }, 3000);
-  // }
   async function saveProfile(event) {
-  event.preventDefault();
+    event.preventDefault();
 
-  setError("");
-  setProfileSaved(false);
+    setError("");
+    setProfileSaved(false);
 
-  try {
-    const updatedUser =
-      await authService.updateProfile({
-        first_name: profile.first_name,
-        last_name: profile.last_name,
-        email: profile.email,
-        telephone: profile.telephone,
+    try {
+      const updatedUser =
+        await authService.updateProfile({
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          email: profile.email,
+          telephone: profile.telephone,
+        });
+
+      setProfile({
+        first_name: updatedUser.first_name || "",
+        last_name: updatedUser.last_name || "",
+        email: updatedUser.email || "",
+        telephone: updatedUser.telephone || "",
       });
 
-    setProfile({
-      first_name: updatedUser.first_name || "",
-      last_name: updatedUser.last_name || "",
-      email: updatedUser.email || "",
-      telephone: updatedUser.telephone || "",
-    });
+      setEditingProfile(false);
+      setProfileSaved(true);
 
-    setEditingProfile(false);
-    setProfileSaved(true);
-
-    setTimeout(() => {
-      setProfileSaved(false);
-    }, 3000);
-  } catch (err) {
-    setError(
-      err.message ||
-        "Impossible de modifier votre profil."
-    );
+      setTimeout(() => {
+        setProfileSaved(false);
+      }, 3000);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Impossible de modifier votre profil."
+      );
+    }
   }
-}
 
+  /*
+   * Chargement initial
+   */
   if (loading) {
     return (
       <main className="min-h-[75vh] bg-sand px-4 py-10">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-2xl border border-earth bg-white p-10 text-center shadow-sm">
             <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-soft border-t-primary" />
+
             <p className="text-muted">
               Chargement de votre espace agricole...
             </p>
@@ -317,9 +406,13 @@ export default function Dashboard() {
     <main className="min-h-[80vh] bg-sand">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
 
-        {/* HEADER */}
+        {/* =====================================================
+            HEADER
+        ====================================================== */}
+
         <section className="mb-6 overflow-hidden rounded-[24px] bg-primary p-6 text-white shadow-[0_18px_50px_rgba(3,106,56,0.16)] sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+
             <div>
               <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/70">
                 Espace agriculteur
@@ -331,7 +424,7 @@ export default function Dashboard() {
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
                 Retrouvez ici vos cultures, votre calendrier agricole,
-                la météo locale, les conseils et votre assistant IA.
+                la météo de votre région et votre assistant IA.
               </p>
             </div>
 
@@ -347,9 +440,13 @@ export default function Dashboard() {
 
         <ErrorMessage message={error} />
 
-        {/* NAVIGATION AGRICULTEUR */}
+        {/* =====================================================
+            NAVIGATION
+        ====================================================== */}
+
         <nav className="mb-6 overflow-x-auto rounded-2xl border border-earth bg-white p-2 shadow-sm">
           <div className="flex min-w-max gap-2">
+
             {[
               ["overview", "Vue d'ensemble"],
               ["cultures", "Mes cultures"],
@@ -380,9 +477,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* AUCUNE CULTURE */}
+        {/* =====================================================
+            AUCUNE CULTURE
+        ====================================================== */}
+
         {cultures.length === 0 ? (
           <section className="rounded-[24px] border border-earth bg-white p-8 text-center shadow-sm sm:p-12">
+
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-soft text-primary">
               <Sprout size={30} />
             </div>
@@ -407,19 +508,25 @@ export default function Dashboard() {
           </section>
         ) : (
           <>
-            {/* CULTURES */}
+            {/* =================================================
+                MES CULTURES
+            ================================================== */}
+
             {activeSection === "cultures" && (
               <section className="space-y-5">
+
                 <div>
                   <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-primary">
                     Mes cultures
                   </span>
+
                   <h2 className="mt-1 font-display text-3xl">
                     Mes suivis agricoles
                   </h2>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+
                   {cultures.map((culture) => {
                     const active =
                       selectedCulture?.id === culture.id;
@@ -438,7 +545,9 @@ export default function Dashboard() {
                             : "border-earth bg-white hover:border-primary/40"
                         }`}
                       >
+
                         <div className="flex items-start justify-between gap-4">
+
                           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-sm">
                             <Leaf size={21} />
                           </div>
@@ -460,10 +569,12 @@ export default function Dashboard() {
                         </p>
 
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+
                           <div className="rounded-xl bg-white p-3">
                             <span className="block text-muted">
                               Superficie
                             </span>
+
                             <strong>
                               {culture.superficie ?? "—"} ha
                             </strong>
@@ -473,10 +584,14 @@ export default function Dashboard() {
                             <span className="block text-muted">
                               Semis
                             </span>
+
                             <strong>
-                              {culture.date_semis ?? "—"}
+                              {formatShortDate(
+                                culture.date_semis
+                              )}
                             </strong>
                           </div>
+
                         </div>
                       </button>
                     );
@@ -485,347 +600,633 @@ export default function Dashboard() {
               </section>
             )}
 
-            {/* VUE D'ENSEMBLE */}
+            {/* =================================================
+                VUE D'ENSEMBLE
+            ================================================== */}
+
             {activeSection === "overview" && (
               <section className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-2xl border border-earth bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted">
-                        Cultures suivies
-                      </span>
-                      <Sprout
-                        size={20}
-                        className="text-primary"
-                      />
-                    </div>
-                    <p className="mt-3 text-3xl font-bold">
-                      {cultures.length}
-                    </p>
-                  </div>
 
-                  <div className="rounded-2xl border border-earth bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted">
-                        Culture active
-                      </span>
-                      <Leaf
-                        size={20}
-                        className="text-primary"
-                      />
-                    </div>
-                    <p className="mt-3 text-2xl font-bold">
-                      {selectedCultureName}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-earth bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted">
-                        Stade actuel
-                      </span>
-                      <CalendarDays
-                        size={20}
-                        className="text-primary"
-                      />
-                    </div>
-                    <p className="mt-3 text-xl font-bold">
-                      {hydric?.stage?.nom ||
-                        calendar?.stade_actuel?.nom ||
-                        "—"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-earth bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted">
-                        Pluie prévue
-                      </span>
-                      <CloudRain
-                        size={20}
-                        className="text-primary"
-                      />
-                    </div>
-                    <p className="mt-3 text-xl font-bold">
-                      {weather?.precipitation_mm ?? "—"} mm
-                    </p>
-                  </div>
-                </div>
+                {/* Résumé culture + prochaine opération */}
 
                 <div className="grid gap-5 lg:grid-cols-2">
-                  {/* METEO */}
-                  <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
-                    <div className="flex items-center justify-between">
+
+                  {/* MA CULTURE */}
+
+                  <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary">
+                        <Leaf size={24} />
+                      </div>
+
                       <div>
                         <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-                          Météo locale
+                          Ma culture
                         </span>
-                        <h2 className="mt-1 text-2xl font-bold">
-                          {weather?.region ||
-                            selectedCulture?.region_nom ||
-                            selectedCulture?.region?.nom ||
-                            "Région non renseignée"}
 
-                         
+                        <h2 className="mt-1 text-2xl font-bold">
+                          {selectedCultureName}
                         </h2>
                       </div>
-
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-soft text-primary">
-                        <Sun size={22} />
-                      </div>
                     </div>
 
-                    <div className="mt-7 flex items-end gap-3">
-                      <span className="font-display text-6xl">
-                        {weather?.temperature ?? "—"}°
-                      </span>
-                      <span className="pb-2 text-muted">
-                        température
-                      </span>
+                    <div className="mt-7 grid gap-3 sm:grid-cols-2">
+
+                      <div className="rounded-xl bg-sand p-4">
+                        <p className="text-sm text-muted">
+                          Semis
+                        </p>
+
+                        <strong className="mt-1 block">
+                          {formatShortDate(
+                            selectedCulture?.date_semis
+                          )}
+                        </strong>
+                      </div>
+
+                      <div className="rounded-xl bg-sand p-4">
+                        <p className="text-sm text-muted">
+                          Stade actuel
+                        </p>
+
+                        <strong className="mt-1 block">
+                          {calendar?.stade_actuel?.nom ||
+                            "—"}
+                        </strong>
+                      </div>
+
                     </div>
 
-                    <div className="mt-6 grid grid-cols-3 gap-3">
-                      <div className="rounded-xl bg-sand p-3">
-                        <Droplets size={17} className="text-primary" />
-                        <p className="mt-2 text-xs text-muted">
-                          Humidité
-                        </p>
-                        <strong>
-                          {weather?.humidite ?? "—"}%
-                        </strong>
-                      </div>
+                    <div className="mt-3 rounded-xl bg-sand p-4">
 
-                      <div className="rounded-xl bg-sand p-3">
-                        <Wind size={17} className="text-primary" />
-                        <p className="mt-2 text-xs text-muted">
-                          Vent
-                        </p>
-                        <strong>
-                          {weather?.vent_kmh ?? "—"} km/h
-                        </strong>
-                      </div>
+                      <p className="text-sm text-muted">
+                        Fin prévue
+                      </p>
 
-                      <div className="rounded-xl bg-sand p-3">
-                        <CloudRain
-                          size={17}
-                          className="text-primary"
-                        />
-                        <p className="mt-2 text-xs text-muted">
-                          Pluie
-                        </p>
-                        <strong>
-                          {weather?.precipitation_mm ?? "—"} mm
-                        </strong>
-                      </div>
+                      <strong className="mt-1 block">
+                        {formatDate(
+                          calendar?.fin_prevue
+                        )}
+                      </strong>
+
                     </div>
                   </article>
 
-                  {/* CONSEIL HYDRIQUE */}
-                  <article className="rounded-[24px] border border-primary/20 bg-soft p-6">
+                  {/* PROCHAINE OPÉRATION */}
+
+                  <article className="rounded-[24px] border border-primary/20 bg-soft p-6 shadow-sm sm:p-8">
+
                     <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary">
-                        <Droplets size={22} />
+
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-primary">
+                        <CalendarDays size={24} />
                       </div>
 
                       <div>
                         <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-                          Conseil agricole
+                          Prochaine étape
                         </span>
+
                         <h2 className="mt-1 text-2xl font-bold">
-                          Conseil hydrique
+                          {nextOperation?.nom ||
+                            "Aucune opération à venir"}
                         </h2>
                       </div>
                     </div>
 
-                    <p className="mt-7 text-lg leading-8 text-ink">
-                      {servicesLoading
-                        ? "Chargement du conseil..."
-                        : hydric?.conseil ||
-                          "Les informations hydriques seront affichées ici."}
-                    </p>
+                    {nextOperation ? (
+                      <>
+                        <p className="mt-7 text-lg font-semibold text-primary">
+                          {formatDate(
+                            nextOperation.date_debut
+                          )}
+                        </p>
 
-                    <div className="mt-7 grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-white p-4">
-                        <span className="text-sm text-muted">
-                          Kc
-                        </span>
-                        <strong className="mt-1 block text-xl">
-                          {hydric?.stage?.kc ?? "—"}
-                        </strong>
-                      </div>
+                        {nextOperation.date_fin &&
+                          nextOperation.date_fin !==
+                            nextOperation.date_debut && (
+                            <p className="mt-1 text-sm text-muted">
+                              Jusqu'au{" "}
+                              {formatDate(
+                                nextOperation.date_fin
+                              )}
+                            </p>
+                          )}
 
-                      <div className="rounded-xl bg-white p-4">
-                        <span className="text-sm text-muted">
-                          ETo
-                        </span>
-                        <strong className="mt-1 block text-xl">
-                          {hydric?.eto ?? "—"} mm
-                        </strong>
-                      </div>
-                    </div>
+                        {nextOperation.description && (
+                          <p className="mt-5 leading-7 text-muted">
+                            {nextOperation.description}
+                          </p>
+                        )}
+
+                        {nextOperation.stade_nom && (
+                          <span className="mt-5 inline-block rounded-full bg-white px-3 py-1 text-xs font-semibold text-primary">
+                            Stade :{" "}
+                            {nextOperation.stade_nom}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mt-7 leading-7 text-muted">
+                        Aucune opération future n'est actuellement
+                        disponible dans votre calendrier.
+                      </p>
+                    )}
+
                   </article>
                 </div>
+
+                {/* =================================================
+                    MÉTÉO + CONSEIL DANS OVERVIEW
+                    CÔTE À CÔTE SUR GRAND ÉCRAN
+                ================================================== */}
+
+                <div className="grid gap-5 lg:grid-cols-2">
+
+                  {/* MÉTÉO */}
+
+                  <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+
+                    <div className="flex items-start justify-between gap-5">
+
+                      <div>
+
+                        <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
+                          Météo de ma région
+                        </span>
+
+                        <h2 className="mt-1 font-display text-3xl">
+                          {getRegionName(
+                            selectedCulture,
+                            weather
+                          )}
+                        </h2>
+
+                      </div>
+
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-soft text-primary">
+                        <Sun size={24} />
+                      </div>
+
+                    </div>
+
+                    <div className="mt-7 grid gap-3 sm:grid-cols-2">
+
+                      <div className="rounded-xl bg-sand p-4">
+
+                        <p className="text-sm text-muted">
+                          Température
+                        </p>
+
+                        <strong className="mt-1 block text-2xl">
+                          {weather?.temperature ?? "—"}°C
+                        </strong>
+
+                      </div>
+
+                      <div className="rounded-xl bg-sand p-4">
+
+                        <p className="text-sm text-muted">
+                          Humidité
+                        </p>
+
+                        <strong className="mt-1 block text-2xl">
+                          {weather?.humidite ?? "—"}%
+                        </strong>
+
+                      </div>
+
+                      <div className="rounded-xl bg-sand p-4">
+
+                        <p className="text-sm text-muted">
+                          Vent
+                        </p>
+
+                        <strong className="mt-1 block text-2xl">
+                          {weather?.vent_kmh ?? "—"} km/h
+                        </strong>
+
+                      </div>
+
+                      <div className="rounded-xl bg-sand p-4">
+
+                        <p className="text-sm text-muted">
+                          Pluie
+                        </p>
+
+                        <strong className="mt-1 block text-2xl">
+                          {weather?.precipitation_mm ?? "—"} mm
+                        </strong>
+
+                      </div>
+
+                      <div className="rounded-xl bg-sand p-4 sm:col-span-2">
+
+                        <p className="text-sm text-muted">
+                          Pluie prévue
+                        </p>
+
+                        <strong className="mt-1 block text-2xl">
+                          {weather?.pluie_prevue
+                            ? "Oui"
+                            : "Non"}
+                        </strong>
+
+                      </div>
+
+                    </div>
+
+                  </article>
+
+                  {/* CONSEIL */}
+
+                  <article className="rounded-[24px] bg-primary p-6 text-white shadow-sm sm:p-8">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+                        <CloudRain size={24} />
+                      </div>
+
+                      <div>
+                        <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-white/70">
+                          Conseil
+                        </span>
+
+                        <h2 className="mt-1 text-2xl font-bold">
+                          Conseil
+                        </h2>
+                      </div>
+
+                    </div>
+
+                    <p className="mt-7 leading-7 text-white/90">
+                      {weather?.conseil ||
+                        "Le conseil météo sera affiché ici."}
+                    </p>
+
+                  </article>
+
+                </div>
+
               </section>
             )}
 
-            {/* CALENDRIER */}
+            {/* =================================================
+                CALENDRIER AGRICOLE
+            ================================================== */}
+
             {activeSection === "calendar" && (
               <section className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
+                {/* EN-TÊTE */}
+
+                <div className="flex flex-col gap-5 border-b border-earth pb-6 sm:flex-row sm:items-end sm:justify-between">
+
                   <div>
+
                     <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
                       Calendrier agricole intelligent
                     </span>
 
-                    <h2 className="mt-1 font-display text-3xl">
+                    <h2 className="mt-1 font-display text-3xl sm:text-4xl">
                       {selectedCultureName}
                     </h2>
+
+                    <div className="mt-3 space-y-1 text-sm text-muted">
+
+                      <p>
+                        Semis :{" "}
+                        <strong className="text-ink">
+                          {formatDate(
+                            selectedCulture?.date_semis
+                          )}
+                        </strong>
+                      </p>
+
+                      <p>
+                        Fin prévue :{" "}
+                        <strong className="text-ink">
+                          {formatDate(
+                            calendar?.fin_prevue
+                          )}
+                        </strong>
+                      </p>
+
+                    </div>
+
                   </div>
 
-                  <span className="rounded-full bg-soft px-4 py-2 text-sm font-bold text-primary">
-                    Stade :{" "}
-                    {calendar?.stade_actuel?.nom ||
-                      hydric?.stage?.nom ||
-                      "—"}
-                  </span>
+                  <div className="rounded-2xl bg-soft px-5 py-4">
+
+                    <span className="block text-xs font-extrabold uppercase tracking-[0.1em] text-primary">
+                      Stade actuel
+                    </span>
+
+                    <strong className="mt-1 block text-lg text-primary">
+                      {calendar?.stade_actuel?.nom ||
+                        "—"}
+                    </strong>
+
+                  </div>
+
                 </div>
 
-                <div className="mt-8 space-y-5">
-                  {calendar?.operations?.length ? (
-                    calendar.operations.map((operation) => (
-                      <article
-                        key={operation.id}
-                        className="relative border-l-2 border-primary/20 pl-6"
-                      >
-                        <div className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-primary" />
+                {/* TIMELINE */}
 
-                        <span className="text-sm font-semibold text-primary">
-                          {operation.date_debut} →{" "}
-                          {operation.date_fin}
-                        </span>
+                <div className="mt-8">
 
-                        <h3 className="mt-1 text-xl font-bold">
-                          {operation.nom}
-                        </h3>
+                  {servicesLoading ? (
+                    <div className="rounded-2xl bg-sand p-6 text-center text-muted">
+                      Chargement du calendrier...
+                    </div>
+                  ) : calendar?.operations?.length ? (
 
-                        <p className="mt-2 leading-7 text-muted">
-                          {operation.description}
-                        </p>
+                    <div className="relative">
 
-                        {operation.stade_nom && (
-                          <span className="mt-3 inline-block rounded-full bg-sand px-3 py-1 text-xs font-semibold">
-                            Stade : {operation.stade_nom}
-                          </span>
+                      {/* Ligne verticale */}
+
+                      <div className="absolute bottom-0 left-[11px] top-0 w-[2px] bg-primary/15" />
+
+                      <div className="space-y-8">
+
+                        {calendar.operations.map(
+                          (operation) => {
+
+                            const isNext =
+                              nextOperation?.id ===
+                              operation.id;
+
+                            return (
+                              <article
+                                key={operation.id}
+                                className="relative pl-10"
+                              >
+
+                                {/* Point */}
+
+                                <div
+                                  className={`absolute left-0 top-1 flex h-6 w-6 items-center justify-center rounded-full border-4 border-white shadow-sm ${
+                                    isNext
+                                      ? "bg-primary"
+                                      : "bg-primary/70"
+                                  }`}
+                                />
+
+                                {/* CONTENU */}
+
+                                <div
+                                  className={`rounded-2xl border p-5 transition ${
+                                    isNext
+                                      ? "border-primary bg-soft shadow-sm"
+                                      : "border-earth bg-white"
+                                  }`}
+                                >
+
+                                  {isNext && (
+                                    <span className="mb-3 inline-flex rounded-full bg-primary px-3 py-1 text-xs font-bold text-white">
+                                      Prochaine opération
+                                    </span>
+                                  )}
+
+                                  <p className="text-sm font-semibold text-primary">
+                                    {formatDateRange(
+                                      operation.date_debut,
+                                      operation.date_fin
+                                    )}
+                                  </p>
+
+                                  <h3 className="mt-2 text-xl font-bold">
+                                    {operation.nom}
+                                  </h3>
+
+                                  {operation.description && (
+                                    <p className="mt-2 leading-7 text-muted">
+                                      {
+                                        operation.description
+                                      }
+                                    </p>
+                                  )}
+
+                                  {operation.stade_nom && (
+                                    <span className="mt-4 inline-block rounded-full bg-sand px-3 py-1 text-xs font-semibold">
+                                      Stade :{" "}
+                                      {
+                                        operation.stade_nom
+                                      }
+                                    </span>
+                                  )}
+
+                                </div>
+                              </article>
+                            );
+                          }
                         )}
-                      </article>
-                    ))
+
+                      </div>
+                    </div>
+
                   ) : (
                     <div className="rounded-2xl bg-sand p-6 text-muted">
-                      Le calendrier sera affiché ici dès que les
-                      données sont disponibles.
+                      Le calendrier agricole n'est pas encore
+                      disponible pour cette culture.
                     </div>
                   )}
+
                 </div>
+
               </section>
             )}
 
-            {/* METEO */}
+            {/* =================================================
+                MÉTÉO
+                MÉTÉO + CONSEIL CÔTE À CÔTE
+            ================================================== */}
+
             {activeSection === "weather" && (
               <section className="grid gap-5 lg:grid-cols-2">
+
+                {/* MÉTÉO DE MA RÉGION */}
+
                 <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
-                  <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-                    Météo de ma région
-                  </span>
 
-                  <h2 className="mt-1 font-display text-3xl">
-                    {getLocalisation(selectedCulture)}
-                  </h2>
+                  <div className="flex items-start justify-between gap-5">
 
-                  <div className="mt-8 flex items-end gap-3">
-                    <CloudRain
-                      size={38}
-                      className="mb-2 text-primary"
-                    />
-                    <span className="font-display text-6xl">
-                      {weather?.temperature ?? "—"}°
-                    </span>
+                    <div>
+
+                      <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
+                        Météo de ma région
+                      </span>
+
+                      <h2 className="mt-1 font-display text-3xl sm:text-4xl">
+                        {getRegionName(
+                          selectedCulture,
+                          weather
+                        )}
+                      </h2>
+
+                    </div>
+
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-soft text-primary">
+                      <Sun size={28} />
+                    </div>
+
                   </div>
 
-                  <div className="mt-8 grid grid-cols-2 gap-3">
+                  {/* Température */}
+
+                  <div className="mt-8 flex items-center gap-4">
+
+                    <span className="font-display text-6xl sm:text-7xl">
+                      {weather?.temperature ?? "—"}°C
+                    </span>
+
+                    <div>
+                      <p className="text-muted">
+                        Conditions actuelles
+                      </p>
+
+                      <p className="mt-1 font-semibold">
+                        {weather?.description ||
+                          "Informations météorologiques"}
+                      </p>
+                    </div>
+
+                  </div>
+
+                  {/* DONNÉES MÉTÉO */}
+
+                  <div className="mt-8 grid gap-3 sm:grid-cols-2">
+
                     <div className="rounded-xl bg-sand p-4">
-                      <p className="text-sm text-muted">
+
+                      <Droplets
+                        size={18}
+                        className="text-primary"
+                      />
+
+                      <p className="mt-2 text-sm text-muted">
                         Humidité
                       </p>
-                      <strong>
-                        {weather?.humidite ?? "—"}%
+
+                      <strong className="text-lg">
+                        {weather?.humidite ?? "—"} %
                       </strong>
+
                     </div>
 
                     <div className="rounded-xl bg-sand p-4">
-                      <p className="text-sm text-muted">
+
+                      <Wind
+                        size={18}
+                        className="text-primary"
+                      />
+
+                      <p className="mt-2 text-sm text-muted">
                         Vent
                       </p>
-                      <strong>
+
+                      <strong className="text-lg">
                         {weather?.vent_kmh ?? "—"} km/h
                       </strong>
+
                     </div>
 
                     <div className="rounded-xl bg-sand p-4">
-                      <p className="text-sm text-muted">
-                        Précipitations
+
+                      <CloudRain
+                        size={18}
+                        className="text-primary"
+                      />
+
+                      <p className="mt-2 text-sm text-muted">
+                        Précipitation
                       </p>
-                      <strong>
+
+                      <strong className="text-lg">
                         {weather?.precipitation_mm ?? "—"} mm
                       </strong>
+
                     </div>
 
                     <div className="rounded-xl bg-sand p-4">
-                      <p className="text-sm text-muted">
+
+                      <CloudRain
+                        size={18}
+                        className="text-primary"
+                      />
+
+                      <p className="mt-2 text-sm text-muted">
                         Pluie prévue
                       </p>
-                      <strong>
+
+                      <strong className="text-lg">
                         {weather?.pluie_prevue
                           ? "Oui"
                           : "Non"}
                       </strong>
+
                     </div>
+
                   </div>
+
                 </article>
 
-                <article className="rounded-[24px] border border-primary/20 bg-primary p-6 text-white shadow-sm sm:p-8">
+                {/* CONSEIL MÉTÉO */}
+
+                <article className="rounded-[24px] bg-primary p-6 text-white shadow-sm sm:p-8">
+
                   <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-white/70">
-                    Conseil
+                    Conseil météo
                   </span>
 
                   <h2 className="mt-2 font-display text-3xl">
                     Que faire aujourd'hui ?
                   </h2>
 
-                  <p className="mt-6 text-lg leading-8 text-white/85">
-                    {hydric?.conseil ||
-                      "Le conseil agricole apparaîtra ici à partir des conditions météo et des données de votre culture."}
+                  <p className="mt-6 max-w-3xl text-lg leading-8 text-white/90">
+                    {weather?.conseil ||
+                      "Aucun conseil météo disponible pour le moment."}
                   </p>
+
                 </article>
+
               </section>
             )}
 
-            {/* IA */}
+            {/* =================================================
+                IA
+            ================================================== */}
+
             {activeSection === "ai" && (
               <section className="grid gap-5 lg:grid-cols-2">
+
+                {/* =================================================
+                    CARTE PHOTO
+                ================================================== */}
+
                 <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+
                   <div className="flex items-center gap-3">
+
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary">
                       <Camera size={24} />
                     </div>
 
                     <div>
+
                       <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
                         Intelligence artificielle
                       </span>
+
                       <h2 className="text-2xl font-bold">
                         Un problème sur votre plante ?
                       </h2>
+
                     </div>
+
                   </div>
 
                   <p className="mt-5 leading-7 text-muted">
@@ -834,8 +1235,12 @@ export default function Dashboard() {
                     téléphone.
                   </p>
 
+                  {/* =================================================
+                      INPUT APPAREIL PHOTO
+                  ================================================== */}
+
                   <input
-                    ref={fileInputRef}
+                    ref={cameraInputRef}
                     type="file"
                     accept="image/*"
                     capture="environment"
@@ -843,25 +1248,93 @@ export default function Dashboard() {
                     className="hidden"
                   />
 
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-earth bg-sand px-5 py-8 text-center transition hover:border-primary hover:bg-soft"
-                  >
-                    <Camera size={30} className="text-primary" />
+                  {/* =================================================
+                      INPUT GALERIE / FICHIERS
+                  ================================================== */}
 
-                    <span>
-                      <strong className="block">
-                        {photo
-                          ? photo.name
-                          : "Prendre ou importer une photo"}
-                      </strong>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
 
-                      <small className="mt-1 block text-muted">
-                        Photo nette de la feuille ou de la plante
-                      </small>
-                    </span>
-                  </button>
+                  {/* =================================================
+                      DEUX BOUTONS
+                  ================================================== */}
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+
+                    {/* PRENDRE UNE PHOTO */}
+
+                    <button
+                      type="button"
+                      onClick={openCamera}
+                      className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-primary bg-soft px-5 py-6 text-center transition hover:bg-primary hover:text-white"
+                    >
+
+                      <Camera
+                        size={30}
+                        className="text-primary"
+                      />
+
+                      <span>
+                        <strong className="block">
+                          Prendre une photo
+                        </strong>
+
+                        <small className="mt-1 block text-muted">
+                          Utiliser l'appareil photo
+                        </small>
+                      </span>
+
+                    </button>
+
+                    {/* IMPORTER UNE PHOTO */}
+
+                    <button
+                      type="button"
+                      onClick={openFilePicker}
+                      className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-earth bg-sand px-5 py-6 text-center transition hover:border-primary hover:bg-soft"
+                    >
+
+                      <ImageIcon
+                        size={30}
+                        className="text-primary"
+                      />
+
+                      <span>
+                        <strong className="block">
+                          Importer une photo
+                        </strong>
+
+                        <small className="mt-1 block text-muted">
+                          Depuis la galerie ou les fichiers
+                        </small>
+                      </span>
+
+                    </button>
+
+                  </div>
+
+                  {/* PHOTO SÉLECTIONNÉE */}
+
+                  {photo && (
+                    <div className="mt-4 rounded-xl bg-soft px-4 py-3">
+
+                      <p className="text-sm font-semibold text-primary">
+                        Photo sélectionnée
+                      </p>
+
+                      <p className="mt-1 truncate text-sm text-muted">
+                        {photo.name}
+                      </p>
+
+                    </div>
+                  )}
+
+                  {/* APERÇU */}
 
                   {previewUrl && (
                     <img
@@ -871,28 +1344,40 @@ export default function Dashboard() {
                     />
                   )}
 
+                  {/* ANALYSE */}
+
                   <button
                     type="button"
                     disabled={!photo || analysisLoading}
                     onClick={analyzePhoto}
                     className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
+
                     <Camera size={18} />
 
                     {analysisLoading
                       ? "Analyse en cours..."
                       : "Analyser la plante"}
+
                   </button>
+
                 </article>
 
+                {/* =================================================
+                    RÉSULTAT IA
+                ================================================== */}
+
                 <article className="rounded-[24px] border border-primary/20 bg-soft p-6 sm:p-8">
+
                   <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
                     Résultat
                   </span>
 
                   {analysis ? (
                     <div className="mt-4 space-y-5">
+
                       <div>
+
                         <p className="text-sm font-semibold text-muted">
                           Problème détecté
                         </p>
@@ -901,9 +1386,11 @@ export default function Dashboard() {
                           {analysis.probleme ||
                             "Analyse terminée"}
                         </h3>
+
                       </div>
 
                       <div>
+
                         <p className="text-sm font-semibold text-muted">
                           Résultat
                         </p>
@@ -913,9 +1400,11 @@ export default function Dashboard() {
                             analysis.description ||
                             "Aucune description disponible."}
                         </p>
+
                       </div>
 
                       <div className="rounded-2xl bg-white p-5">
+
                         <p className="text-sm font-semibold text-muted">
                           Conseil agronomique
                         </p>
@@ -924,6 +1413,7 @@ export default function Dashboard() {
                           {analysis.conseil ||
                             "Aucun conseil supplémentaire disponible."}
                         </p>
+
                       </div>
 
                       {analysis.confiance !== undefined && (
@@ -934,14 +1424,17 @@ export default function Dashboard() {
                       )}
 
                       <p className="text-xs leading-5 text-muted">
-                        L'analyse constitue une aide à la décision et
-                        ne remplace pas l'avis d'un professionnel
+                        L'analyse constitue une aide à la décision
+                        et ne remplace pas l'avis d'un professionnel
                         agricole.
                       </p>
+
                     </div>
                   ) : (
                     <div className="flex min-h-[360px] items-center justify-center text-center">
+
                       <div>
+
                         <Sprout
                           size={45}
                           className="mx-auto text-primary"
@@ -952,26 +1445,37 @@ export default function Dashboard() {
                         </h3>
 
                         <p className="mt-2 max-w-sm text-muted">
-                          Importez une photo pour lancer
-                          l'analyse.
+                          Prenez une photo ou importez une image
+                          pour lancer l'analyse.
                         </p>
+
                       </div>
+
                     </div>
                   )}
+
                 </article>
+
               </section>
             )}
 
-            {/* PROFIL */}
+            {/* =================================================
+                PROFIL
+            ================================================== */}
+
             {activeSection === "profile" && (
               <section className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+
                   <div className="flex items-center gap-4">
+
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-soft text-primary">
                       <UserRound size={28} />
                     </div>
 
                     <div>
+
                       <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
                         Mon profil
                       </span>
@@ -979,25 +1483,31 @@ export default function Dashboard() {
                       <h2 className="mt-1 font-display text-3xl">
                         Mes informations
                       </h2>
+
                     </div>
+
                   </div>
 
                   {!editingProfile && (
                     <button
                       type="button"
-                      onClick={() => setEditingProfile(true)}
+                      onClick={() =>
+                        setEditingProfile(true)
+                      }
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary px-4 py-3 font-semibold text-primary"
                     >
                       <Pencil size={17} />
                       Modifier
                     </button>
                   )}
+
                 </div>
 
                 <form
                   onSubmit={saveProfile}
                   className="mt-8 grid gap-4 sm:grid-cols-2"
                 >
+
                   <input
                     value={profile.first_name}
                     onChange={(e) =>
@@ -1053,6 +1563,7 @@ export default function Dashboard() {
 
                   {editingProfile && (
                     <div className="flex flex-wrap gap-3 sm:col-span-2">
+
                       <button
                         type="submit"
                         className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white"
@@ -1071,9 +1582,12 @@ export default function Dashboard() {
                         <X size={17} />
                         Annuler
                       </button>
+
                     </div>
                   )}
+
                 </form>
+
               </section>
             )}
           </>
