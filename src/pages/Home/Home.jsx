@@ -1,126 +1,157 @@
+
+import { useState } from "react";
 import {
   CalendarDays,
   Camera,
   CloudSun,
-  Leaf,
-  MapPin,
-  Sprout,
+  ArrowRight,
+  ChevronDown,
 } from "lucide-react";
-
 import { Link } from "react-router-dom";
 
 const features = [
   {
     icon: CalendarDays,
     title: "Calendrier agricole intelligent",
-    text: "Culture + date de semis : le stade est calculé automatiquement et les opérations sont organisées.",
+    text: "Suivez automatiquement les étapes de vos cultures et les opérations à réaliser au bon moment.",
   },
   {
     icon: CloudSun,
-    title: "Météo locale & conseil hydrique",
-    text: "Commune/localité → coordonnées géographiques → météo locale → conseil adapté.",
+    title: "Météo locale",
+    text: "Consultez les prévisions météorologiques pour mieux anticiper les conditions dans votre région.",
   },
   {
     icon: Camera,
     title: "Analyse IA des plantes",
-    text: "Prenez ou importez une photo pour obtenir une analyse et une orientation agronomique.",
+    text: "Prenez ou importez une photo pour obtenir une analyse et des conseils agronomiques adaptés.",
   },
 ];
 
+const cultures = [
+  { name: "Riz", image: "/images/cultures/riz.jpg" },
+  { name: "Mil", image: "/images/cultures/mil.jpg" },
+  { name: "Maïs", image: "/images/cultures/mais.jpg" },
+  { name: "Sorgho", image: "/images/cultures/sorgho.jpg" },
+  { name: "Arachide", image: "/images/cultures/arachide.jpg" },
+  { name: "Niébé", image: "/images/cultures/niebe.jpg" },
+  { name: "Manioc", image: "/images/cultures/manioc.jpg" },
+  { name: "Oignon", image: "/images/cultures/oignon.jpg" },
+  { name: "Mangue", image: "/images/cultures/mangue.jpg" },
+  { name: "Pastèque", image: "/images/cultures/pasteque.jpg" },
+];
+
+const steps = [
+  "Créez votre compte",
+  "Enregistrez vos cultures",
+  "Suivez votre calendrier",
+  "Analysez vos plantes avec l’IA",
+];
+
 export default function Home() {
+  const [visibleCultures, setVisibleCultures] = useState(3);
+
+  function showMoreCultures() {
+    setVisibleCultures((current) => {
+      if (current === 3) return 6;
+      if (current === 6) return 10;
+      return 10;
+    });
+  }
+
   return (
     <main>
-      <section className="bg-sand px-0 py-14 sm:py-16 lg:py-[88px]">
-        <div className="mx-auto grid w-[calc(100%-24px)] max-w-[1180px] items-center gap-12 lg:w-[calc(100%-36px)] lg:grid-cols-[1.05fr_.95fr] lg:gap-16">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-              Agriculture sénégalaise · aide à la décision
-            </span>
+      {/* HERO */}
+      
+      {/* HERO — inspiration FarmRaise FSA Hub */}
+      <section className="relative overflow-hidden bg-[#F3F8F2] px-4 py-12 sm:px-6 sm:py-16 lg:py-[52px]">
+        {/* Motif décoratif discret en arrière-plan */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.22]"
+          style={{
+            backgroundImage:
+              "repeating-radial-gradient(ellipse at 15% 20%, transparent 0, transparent 28px, #DCE9DE 29px, transparent 31px, transparent 48px)",
+            backgroundSize: "560px 420px",
+          }}
+        />
 
-            <h1 className="mt-5 max-w-[720px] font-display text-[40px] font-medium leading-[1.05] tracking-[-0.045em] text-ink sm:text-[48px] lg:text-[62px]">
-              Votre agriculture, guidée par la bonne information.
+        <div className="relative mx-auto grid max-w-[1110px] items-center gap-9 lg:grid-cols-[1.15fr_0.85fr] lg:gap-12">
+          {/* Texte à gauche */}
+          <div className="max-w-[640px]">
+            <h1 className="font-display text-[36px] font-bold leading-[1.08] tracking-[-0.035em] text-black sm:text-[44px] lg:text-[46px]">
+              Ressources en agriculture urbaine
             </h1>
 
-            <p className="mt-5 max-w-[650px] text-base leading-7 text-muted sm:text-lg">
-              Un calendrier agricole intelligent, une météo locale, des
-              conseils hydriques et une assistance IA pour mieux suivre vos
-              cultures.
+            <p className="mt-6 text-base leading-7 text-black sm:text-lg sm:leading-8">
+              L’agriculture urbaine transforme la production, la distribution
+              et l’accès à l’alimentation dans les villes. Que vous cultiviez
+              sur un toit, dans un jardin communautaire ou grâce à
+              l’agriculture verticale, Agri-Conseil vous propose des outils et
+              des conseils pour vous accompagner.
             </p>
-
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                to="/inscription"
-                className="inline-flex items-center justify-center rounded-md border border-primary bg-primary px-5 py-3 font-bold text-white transition hover:opacity-90"
-              >
-                Commencer maintenant
-              </Link>
-
-              <a
-                href="#fonctionnalites"
-                className="inline-flex items-center justify-center rounded-md border border-primary bg-transparent px-5 py-3 font-bold text-primary transition hover:bg-primary hover:text-white"
-              >
-                Découvrir les fonctionnalités
-              </a>
-            </div>
           </div>
 
-          <div className="relative h-[360px] overflow-hidden rounded-[10px] border border-earth bg-white sm:h-[420px] lg:h-[460px]">
-            <div className="absolute right-[12%] top-[11%] h-[85px] w-[85px] rounded-full bg-earth sm:h-[105px] sm:w-[105px]" />
+          {/* Image à droite */}
+          <div className="relative">
+            <div
+              aria-hidden="true"
+              className="absolute -bottom-3 right-[-8px] h-full w-full rounded-[22px] bg-[#DCE9DE]"
+            />
 
-            <div className="absolute -bottom-[1%] -left-[10%] -right-[10%] h-[62%] skew-y-[-4deg] border-t-[14px] border-primary bg-soft sm:border-t-[16px]" />
-
-            <div className="absolute bottom-6 left-6 flex items-center gap-3 rounded-lg bg-white px-4 py-4 shadow-lg">
-              <Sprout size={24} className="text-primary" />
-
-              <div className="flex flex-col">
-                <strong className="text-ink">Agri-Conseil</strong>
-                <span className="text-xs text-muted">
-                  Culture · météo · conseil
-                </span>
-              </div>
-            </div>
+            <img
+              src="/images/agriculture-urbaine.png"
+              alt="Jardin urbain avec des plantes cultivées en pots"
+              className="relative z-10 aspect-[1.45/1] w-full rounded-[18px] object-cover"
+            />
           </div>
         </div>
       </section>
 
+
+      {/* FONCTIONNALITÉS */}
       <section
         id="fonctionnalites"
-        className="scroll-mt-24 px-0 py-16 sm:py-20 lg:py-[90px]"
+        className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
       >
-        <div className="mx-auto w-[calc(100%-24px)] max-w-[1180px] lg:w-[calc(100%-36px)]">
-          <div className="mb-9 max-w-[760px]">
-            <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-              Les trois piliers
+        <div className="mx-auto max-w-[1180px]">
+          <div className="mb-10 max-w-[760px]">
+            <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
+              Les fonctionnalités
             </span>
 
-            <h2 className="mt-3 font-display text-[36px] font-medium leading-[1.05] tracking-[-0.045em] text-ink sm:text-[42px] lg:text-[46px]">
+            <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-[-0.035em] text-[#123D2B] sm:text-4xl lg:text-[44px]">
               Tout ce dont l’agriculteur a besoin, au même endroit.
             </h2>
+
+            <p className="mt-4 text-base leading-7 text-[#475569]">
+              Des outils simples pour mieux organiser et suivre vos cultures.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, text }) => (
               <article
                 key={title}
-                className="rounded-lg border border-earth bg-white p-7 shadow-[0_12px_35px_rgba(31,31,27,0.06)]"
+                className="rounded-xl border border-[#DCE9DE] bg-white p-6 shadow-[0_8px_28px_rgba(18,61,43,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_14px_35px_rgba(18,61,43,0.10)] sm:p-7"
               >
-                <div className="grid h-[50px] w-[50px] place-items-center rounded-full bg-soft text-primary">
-                  <Icon size={25} />
+                <div className="grid h-12 w-12 place-items-center rounded-full bg-[#E5F4E9] text-[#036A38]">
+                  <Icon size={24} strokeWidth={1.9} />
                 </div>
 
-                <h3 className="mt-[22px] text-2xl font-semibold leading-tight text-ink">
+                <h3 className="mt-5 text-xl font-bold leading-snug text-[#123D2B]">
                   {title}
                 </h3>
 
-                <p className="mt-3 text-base leading-7 text-muted lg:min-h-[90px]">
+                <p className="mt-3 min-h-[84px] text-sm leading-6 text-[#475569] sm:text-base">
                   {text}
                 </p>
 
                 <Link
                   to="/inscription"
-                  className="mt-5 inline-block font-extrabold text-primary"
+                  className="mt-5 inline-flex items-center gap-2 font-bold text-[#036A38] transition hover:text-[#0B7950]"
                 >
-                  Découvrir →
+                  Découvrir
+                  <ArrowRight size={17} />
                 </Link>
               </article>
             ))}
@@ -128,112 +159,200 @@ export default function Home() {
         </div>
       </section>
 
+      {/* NOS 10 CULTURES */}
       <section
-        id="comment-ca-marche"
-        className="scroll-mt-24 bg-sand px-0 py-16 sm:py-20 lg:py-[90px]"
+        id="cultures"
+        className="scroll-mt-24 bg-[#F3F8F2] px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
       >
-        <div className="mx-auto w-[calc(100%-24px)] max-w-[1180px] lg:w-[calc(100%-36px)]">
-          <div className="mb-9 max-w-[760px]">
-            <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-              Simple en quatre étapes
-            </span>
+        <div className="mx-auto max-w-[1180px]">
+          <div className="mb-9 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
+                Agriculture au Sénégal
+              </span>
 
-            <h2 className="mt-3 font-display text-[36px] font-medium leading-[1.05] tracking-[-0.045em] text-ink sm:text-[42px] lg:text-[46px]">
-              Comment ça marche ?
-            </h2>
+              <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.035em] text-[#123D2B] sm:text-4xl lg:text-[44px]">
+                Nos 10 cultures
+              </h2>
+
+              <p className="mt-3 max-w-[620px] text-base leading-7 text-[#475569]">
+                Découvrez les cultures prises en charge par Agri-Conseil et
+                accédez à des outils pour mieux les suivre.
+              </p>
+            </div>
+
+            <span className="inline-flex w-fit items-center rounded-full border border-[#DCE9DE] bg-white px-4 py-2 text-sm font-semibold text-[#036A38]">
+              {visibleCultures} sur 10 cultures
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              "Créez votre culture",
-              "Le système calcule votre stade",
-              "Consultez météo et conseil",
-              "Analysez une plante avec l’IA",
-            ].map((title, index) => (
-              <div key={title} className="relative">
-                <span className="font-extrabold tracking-[0.1em] text-primary">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
+          {/* Cartes des cultures */}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {cultures.slice(0, visibleCultures).map((culture, index) => (
+              <article
+                key={culture.name}
+                className="group overflow-hidden rounded-xl border border-[#DCE9DE] bg-white p-4 shadow-[0_6px_24px_rgba(18,61,43,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_14px_32px_rgba(18,61,43,0.10)]"
+              >
+                <div className="relative aspect-[1.65/1] overflow-hidden rounded-lg bg-[#E5F4E9]">
+                  <img
+                    src={culture.image}
+                    alt={`Culture de ${culture.name}`}
+                    loading={index < 3 ? "eager" : "lazy"}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                  />
+                </div>
 
-                <h3 className="mt-2 max-w-[190px] text-xl font-semibold leading-snug text-ink">
-                  {title}
+                <h3 className="mt-4 min-h-[52px] text-xl font-semibold leading-snug text-[#123D2B]">
+                  {culture.name}
                 </h3>
-
-                {index < 3 && (
-                  <span className="absolute right-0 top-2 hidden text-2xl text-earth lg:block">
-                    →
-                  </span>
-                )}
-              </div>
+              </article>
             ))}
           </div>
-        </div>
-      </section>
 
-      <section className="px-0 py-16 sm:py-20 lg:py-[90px]">
-        <div className="mx-auto grid w-[calc(100%-24px)] max-w-[1180px] gap-8 rounded-[10px] border border-earth bg-white p-6 shadow-[0_12px_35px_rgba(31,31,27,0.06)] sm:p-8 lg:w-[calc(100%-36px)] lg:grid-cols-[1fr_.8fr] lg:p-9">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
-              Exemple météo locale
-            </span>
+          {/* Progression et bouton Voir plus */}
+          <div className="mt-9 flex flex-col items-center">
+            {visibleCultures < 10 ? (
+              <button
+                type="button"
+                onClick={showMoreCultures}
+                className="inline-flex min-w-[190px] items-center justify-center gap-2 rounded-md bg-[#036A38] px-7 py-3.5 font-bold text-white shadow-sm transition hover:bg-[#0B7950] focus:outline-none focus:ring-2 focus:ring-[#036A38] focus:ring-offset-2"
+              >
+                Voir plus
+                <ChevronDown size={18} />
+              </button>
+            ) : (
+              <p className="font-semibold text-[#036A38]">
+                Vous avez découvert nos 10 cultures.
+              </p>
+            )}
 
-            <h2 className="mt-3 flex items-center gap-2 font-display text-[30px] font-medium tracking-[-0.04em] text-ink sm:text-[34px]">
-              <MapPin size={22} className="text-primary" />
-              Tivaouane Peulh-Niaga
-            </h2>
+            {/* Échelle de progression sur 10 */}
+            <div
+              className="mt-5 flex w-full max-w-[430px] flex-wrap items-center justify-center gap-2"
+              aria-label={`${visibleCultures} cultures affichées sur 10`}
+            >
+              {Array.from({ length: 10 }, (_, index) => {
+                const number = index + 1;
+                const isCurrent = number === visibleCultures;
+                const isVisible = number <= visibleCultures;
 
-            <div className="mt-5 font-display text-[64px] font-medium leading-none tracking-[-0.05em] text-ink sm:text-[76px]">
-              34°
+                return (
+                  <span
+                    key={number}
+                    aria-current={isCurrent ? "step" : undefined}
+                    aria-label={`${number}${isCurrent ? ", étape actuelle" : ""}`}
+                    className={`grid h-8 w-8 place-items-center rounded-full border text-xs font-bold transition ${
+                      isCurrent
+                        ? "border-[#036A38] bg-[#036A38] text-white ring-4 ring-[#E5F4E9]"
+                        : isVisible
+                          ? "border-[#036A38] bg-[#E5F4E9] text-[#036A38]"
+                          : "border-[#DCE9DE] bg-white text-[#475569]"
+                    }`}
+                  >
+                    {number}
+                  </span>
+                );
+              })}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-4 text-sm text-muted sm:text-base">
-              <span>💧 45% humidité</span>
-              <span>💨 20 km/h</span>
-              <span>🌧️ 15 mm</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-sand p-6 sm:p-7">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex rounded-full bg-soft px-3 py-1.5 text-xs font-extrabold text-primary">
-                Mil
-              </span>
-
-              <span className="inline-flex rounded-full bg-soft px-3 py-1.5 text-xs font-extrabold text-primary">
-                Développement
-              </span>
-            </div>
-
-            <h3 className="mt-5 text-xl font-bold text-ink">
-              Conseil agricole
-            </h3>
-
-            <p className="mt-2 text-base leading-7 text-muted">
-              Le conseil combine culture, stade, météo, Kc, ETo et pluie pour
-              aider à décider du bon moment d’irriguer.
+            <p className="mt-3 text-sm text-[#475569]">
+              {visibleCultures} culture{visibleCultures > 1 ? "s" : ""} affichée
+              {visibleCultures > 1 ? "s" : ""} sur 10
             </p>
           </div>
         </div>
       </section>
 
-      <section className="bg-sand px-0 py-16 sm:py-20">
-        <div className="mx-auto flex w-[calc(100%-24px)] max-w-[1180px] flex-col items-start justify-between gap-8 lg:w-[calc(100%-36px)] lg:flex-row lg:items-center">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
+      {/* COMMENT ÇA MARCHE */}
+      <section
+        id="comment-ca-marche"
+        className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
+      >
+        <div className="mx-auto max-w-[1180px]">
+          <div className="mb-10 max-w-[760px]">
+            <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
+              Simple en quatre étapes
+            </span>
+
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.035em] text-[#123D2B] sm:text-4xl lg:text-[44px]">
+              Comment ça marche ?
+            </h2>
+
+            <p className="mt-3 text-base leading-7 text-[#475569]">
+              Quelques étapes simples pour accéder aux outils nécessaires au
+              suivi de vos cultures.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((title, index) => (
+              <article key={title} className="relative">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#036A38] text-sm font-bold text-white">
+                  {index + 1}
+                </div>
+
+                <h3 className="mt-4 text-lg font-bold leading-snug text-[#123D2B]">
+                  {title}
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-[#475569]">
+                  {
+                    [
+                      "Inscrivez-vous pour créer votre espace personnel.",
+                      "Renseignez votre localisation et les informations de vos cultures.",
+                      "Consultez les étapes prévues et les informations météo.",
+                      "Importez une photo pour obtenir une analyse et des conseils.",
+                    ][index]
+                  }
+                </p>
+
+                {index < 3 && (
+                  <ArrowRight
+                    size={21}
+                    className="absolute right-0 top-3 hidden text-[#0B7950]/50 lg:block"
+                  />
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* BANDEAU FINAL */}
+      <section className="px-4 pb-16 sm:px-6 sm:pb-20">
+        <div className="relative mx-auto max-w-[1180px] overflow-hidden rounded-xl bg-[#00452F] px-6 py-9 sm:px-10 sm:py-11">
+          <div className="absolute inset-y-0 right-0 hidden w-[42%] lg:block">
+            <img
+              src="/images/cultures/feuillage.jpg"
+              alt=""
+              aria-hidden="true"
+              className="h-full w-full object-cover opacity-40"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#00452F] to-transparent" />
+          </div>
+
+          <div className="relative z-10 max-w-[650px]">
+            <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#B7E4C7]">
               Agri-Conseil
             </span>
 
-            <h2 className="mt-2 font-display text-[34px] font-medium leading-tight tracking-[-0.045em] text-ink sm:text-[38px] lg:text-[42px]">
+            <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-[-0.03em] text-white sm:text-4xl">
               Commencez à mieux suivre vos cultures.
             </h2>
-          </div>
 
-          <Link
-            to="/inscription"
-            className="inline-flex items-center justify-center rounded-md border border-white bg-white px-5 py-3 font-bold text-primary transition hover:bg-soft"
-          >
-            Créer mon compte
-          </Link>
+            <p className="mt-3 max-w-[540px] text-base leading-7 text-white/85">
+              Retrouvez vos outils agricoles dans un espace simple, pratique
+              et accessible.
+            </p>
+
+            <Link
+              to="/inscription"
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 font-bold text-[#036A38] transition hover:bg-[#E5F4E9]"
+            >
+              Créer mon compte
+              <ArrowRight size={18} />
+            </Link>
+          </div>
         </div>
       </section>
     </main>

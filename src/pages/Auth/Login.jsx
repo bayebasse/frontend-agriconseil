@@ -100,7 +100,7 @@ export default function Login() {
         {/* DROITE : PHOTO */}
         <section className="relative hidden min-h-[650px] lg:block">
           <img
-            src="/images/auth-agriculture.jpg"
+            src="/images/auth-agriculturebass.jpg"
             alt="Agriculture"
             className="absolute inset-0 h-full w-full object-cover"
           />

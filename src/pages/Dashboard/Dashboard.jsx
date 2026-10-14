@@ -155,6 +155,10 @@ export default function Dashboard() {
    */
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const [profile, setProfile] = useState({
     first_name: user?.first_name || "",
@@ -296,13 +300,128 @@ export default function Dashboard() {
     event.target.value = "";
   }
 
-  function openCamera() {
-    cameraInputRef.current?.click();
+  function stopCamera() {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+
+      cameraStreamRef.current = null;
+    }
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+
+    setCameraOpen(false);
+  }
+
+  async function openCamera() {
+    const isDesktop =
+      typeof window !== "undefined" &&
+      window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+    if (!isDesktop) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    if (cameraOpen) {
+      const video = cameraVideoRef.current;
+
+      if (!video || !video.videoWidth || !video.videoHeight) {
+        setError("La caméra n'est pas encore prête. Réessayez dans un instant.");
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        setError("Impossible de capturer l'image depuis la caméra.");
+        return;
+      }
+
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            setError("Impossible de créer la photo capturée.");
+            return;
+          }
+
+          const file = new File(
+            [blob],
+            `agriconseil-camera-${Date.now()}.jpg`,
+            { type: "image/jpeg" }
+          );
+
+          setPhoto(file);
+          setAnalysis(null);
+
+          if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+          }
+
+          setPreviewUrl(URL.createObjectURL(file));
+          stopCamera();
+        },
+        "image/jpeg",
+        0.92
+      );
+
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    try {
+      setError("");
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+
+      requestAnimationFrame(() => {
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream;
+        }
+      });
+    } catch (err) {
+      setError(
+        "Impossible d'accéder à la caméra. Vérifiez l'autorisation de la caméra dans votre navigateur."
+      );
+    }
   }
 
   function openFilePicker() {
     fileInputRef.current?.click();
   }
+
+  useEffect(() => {
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   async function analyzePhoto() {
     if (!photo) {
@@ -326,11 +445,7 @@ export default function Dashboard() {
 
       const result = await iaService.analyze(formData);
 
-      setAnalysis(
-        result?.analyse ||
-          result?.resultat ||
-          result
-      );
+      setAnalysis(result?.resultat_ia || null);
     } catch (err) {
       setError(
         err.message ||
@@ -1318,6 +1433,22 @@ export default function Dashboard() {
 
                   </div>
 
+                  {cameraOpen && (
+                    <div className="mt-5 overflow-hidden rounded-2xl border border-primary/20 bg-black">
+                      <video
+                        ref={cameraVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="max-h-80 w-full object-cover"
+                      />
+
+                      <p className="px-4 py-3 text-center text-sm text-white">
+                        Cliquez à nouveau sur « Prendre une photo » pour capturer l'image.
+                      </p>
+                    </div>
+                  )}
+
                   {/* PHOTO SÉLECTIONNÉE */}
 
                   {photo && (
@@ -1377,80 +1508,71 @@ export default function Dashboard() {
                     <div className="mt-4 space-y-5">
 
                       <div>
-
                         <p className="text-sm font-semibold text-muted">
-                          Problème détecté
+                          Culture détectée
                         </p>
-
                         <h3 className="mt-1 text-2xl font-bold">
-                          {analysis.probleme ||
-                            "Analyse terminée"}
+                          {analysis.prediction?.culture || "—"}
                         </h3>
-
                       </div>
 
                       <div>
-
                         <p className="text-sm font-semibold text-muted">
-                          Résultat
+                          Résultat de l'analyse
                         </p>
-
-                        <p className="mt-1 leading-7">
-                          {analysis.resultat ||
-                            analysis.description ||
-                            "Aucune description disponible."}
+                        <p className="mt-1 text-lg font-semibold">
+                          {analysis.prediction?.maladie || "Résultat indisponible"}
                         </p>
-
                       </div>
 
-                      <div className="rounded-2xl bg-white p-5">
+                      {analysis.connaissance?.contenu && (
+                        <div className="rounded-2xl bg-white p-5">
+                          <p className="text-sm font-semibold text-muted">
+                            Conseils et recommandations
+                          </p>
 
-                        <p className="text-sm font-semibold text-muted">
-                          Conseil agronomique
-                        </p>
+                          {analysis.connaissance.titre && (
+                            <p className="mt-2 font-bold text-primary">
+                              {analysis.connaissance.titre}
+                            </p>
+                          )}
 
-                        <p className="mt-2 leading-7">
-                          {analysis.conseil ||
-                            "Aucun conseil supplémentaire disponible."}
-                        </p>
-
-                      </div>
-
-                      {analysis.confiance !== undefined && (
-                        <p className="text-sm font-semibold text-primary">
-                          Confiance indicative :{" "}
-                          {analysis.confiance}%
-                        </p>
+                          <p className="mt-3 whitespace-pre-line leading-7">
+                            {analysis.connaissance.contenu}
+                          </p>
+                        </div>
                       )}
 
-                      <p className="text-xs leading-5 text-muted">
-                        L'analyse constitue une aide à la décision
-                        et ne remplace pas l'avis d'un professionnel
-                        agricole.
-                      </p>
+                      {analysis.conseil && (
+                        <div className="rounded-2xl bg-white p-5">
+                          <p className="text-sm font-semibold text-muted">
+                            Conseil pratique
+                          </p>
+
+                          <p className="mt-2 whitespace-pre-line leading-7">
+                            {analysis.conseil}
+                          </p>
+                        </div>
+                      )}
 
                     </div>
                   ) : (
                     <div className="flex min-h-[360px] items-center justify-center text-center">
-
                       <div>
-
                         <Sprout
                           size={45}
                           className="mx-auto text-primary"
                         />
 
                         <h3 className="mt-4 text-xl font-bold">
-                          Votre diagnostic apparaîtra ici
+                          Le résultat de votre analyse apparaîtra ici
                         </h3>
 
                         <p className="mt-2 max-w-sm text-muted">
                           Prenez une photo ou importez une image
                           pour lancer l'analyse.
                         </p>
-
                       </div>
-
                     </div>
                   )}
 
