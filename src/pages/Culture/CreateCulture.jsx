@@ -37,6 +37,8 @@ export default function CreateCulture() {
     commune: "",
     culture: "",
     superficie: "",
+    variete: "",
+    systeme_culture: "",
     date_semis: "",
     type_sol: "sableux",
   });
@@ -226,17 +228,20 @@ export default function CreateCulture() {
     setLoading(true);
 
     try {
-      await cultureService.createCulture({
+      const createdCulture = await cultureService.createCulture({
         region: Number(form.region),
         departement: Number(form.departement),
         commune: Number(form.commune),
         culture: Number(form.culture),
         superficie: form.superficie,
+        unite_superficie: "ha",
+        variete: form.variete,
+        systeme_culture: form.systeme_culture,
         date_semis: form.date_semis,
         type_sol: form.type_sol,
       });
 
-      navigate("/dashboard");
+      navigate("/dashboard", { state: { createdCultureId: createdCulture.id } });
     } catch (err) {
       setError(
         err.message ||
@@ -448,6 +453,38 @@ export default function CreateCulture() {
                       {culture.nom}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="variete" className="mb-1.5 block text-sm font-bold text-ink">
+                  Variété (facultatif)
+                </label>
+                <input
+                  id="variete"
+                  type="text"
+                  maxLength={120}
+                  value={form.variete}
+                  onChange={(event) => setForm({ ...form, variete: event.target.value })}
+                  placeholder="Ex. variété locale"
+                  className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="systeme_culture" className="mb-1.5 block text-sm font-bold text-ink">
+                  Système de culture
+                </label>
+                <select
+                  id="systeme_culture"
+                  value={form.systeme_culture}
+                  onChange={(event) => setForm({ ...form, systeme_culture: event.target.value })}
+                  className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none focus:border-primary"
+                >
+                  <option value="">Non renseigné</option>
+                  <option value="pluvial">Pluvial</option>
+                  <option value="irrigue">Irrigué</option>
+                  <option value="mixte">Mixte</option>
                 </select>
               </div>
 

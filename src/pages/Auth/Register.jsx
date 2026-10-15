@@ -15,6 +15,7 @@ export default function Register() {
     last_name: "",
     email: "",
     telephone: "",
+    role: "farmer",
   });
 
   const [error, setError] = useState("");
@@ -24,8 +25,8 @@ export default function Register() {
     setError("");
 
     try {
-      await register(form);
-      navigate("/dashboard");
+      const newUser = await register(form);
+      navigate(newUser.role === "buyer" ? "/acheteur" : "/dashboard");
     } catch (err) {
       setError(err.message);
     }
@@ -54,6 +55,17 @@ export default function Register() {
             </div>
 
             <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
+              <label className="text-sm font-semibold text-ink">
+                Type de compte
+                <select
+                  value={form.role}
+                  onChange={(event) => setForm({ ...form, role: event.target.value })}
+                  className="mt-1 w-full rounded-md border border-earth bg-white px-4 py-3 font-normal"
+                >
+                  <option value="farmer">Agriculteur</option>
+                  <option value="buyer">Acheteur</option>
+                </select>
+              </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   type="text"

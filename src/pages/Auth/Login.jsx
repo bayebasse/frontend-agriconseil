@@ -20,8 +20,11 @@ export default function Login() {
     setError("");
 
     try {
-      await login(form);
-      navigate("/dashboard");
+      const authenticatedUser = await login(form);
+      navigate(
+        authenticatedUser.role === "admin" ? "/admin" :
+          authenticatedUser.role === "buyer" ? "/acheteur" : "/dashboard"
+      );
     } catch (err) {
       setError(err.message);
     }
@@ -53,7 +56,7 @@ export default function Login() {
             <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
               <input
                 type="text"
-                placeholder="Nom d'utilisateur"
+                placeholder="Nom d'utilisateur ou email"
                 value={form.username}
                 onChange={(event) =>
                   setForm({

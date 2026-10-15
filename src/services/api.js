@@ -62,11 +62,19 @@
 
 //versiion finale sans bugggg
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://127.0.0.1:8000/api";
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const API_URL = (
+  configuredApiUrl ||
+  (import.meta.env.DEV ? "http://127.0.0.1:8000/api" : "")
+).replace(/\/+$/, "");
 
 async function request(path, options = {}) {
+  if (!API_URL) {
+    throw new Error(
+      "L’URL de l’API est absente. Configurez VITE_API_URL avant de lancer ou construire l’application."
+    );
+  }
+
   const headers = {
     ...(options.headers || {}),
   };
@@ -111,11 +119,13 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
+    const fieldErrors = Object.entries(data || {})
+      .filter(([key]) => key !== "detail")
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(" ") : value}`)
+      .filter((message) => message && !message.endsWith(": "));
     throw new Error(
       data?.detail ||
-        Object.values(data || {})
-          .flat()
-          .join(" ") ||
+        fieldErrors.join(" ") ||
         "Une erreur est survenue."
     );
   }
@@ -132,7 +142,12 @@ export const api = {
       "/auth/login/",
       {
         method: "POST",
-        body,
+        // Support both the current username API and deployments that still
+        // validate an `email` field for login.
+        body: {
+          ...body,
+          email: body.email || body.username,
+        },
       }
     );
 
@@ -201,6 +216,40 @@ export const api = {
       body,
     }),
 
+  yieldPrediction: (id) =>
+    request(`/mes-cultures/${id}/prevision-rendement/`),
+
+  buyerCrops: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== "" && value != null) params.set(key, value);
+    });
+    return request(`/acheteur/cultures/?${params.toString()}`);
+  },
+
+  orders: () => request("/transactions/orders/"),
+  createOrder: (cropId, body) => request(`/transactions/crops/${cropId}/orders/`, { method: "POST", body }),
+  orderAction: (orderId, action) => request(`/transactions/orders/${orderId}/action/`, { method: "POST", body: { action } }),
+  reservations: () => request("/transactions/reservations/"),
+  createReservation: (cropId, body) => request(`/transactions/crops/${cropId}/reservations/`, { method: "POST", body }),
+  reservationAction: (reservationId, action) => request(`/transactions/reservations/${reservationId}/action/`, { method: "POST", body: { action } }),
+
+  startBuyerConversation: (cropId) =>
+    request(`/messages/conversations/from-crop/${cropId}/`, { method: "POST", body: {} }),
+  conversations: () => request("/messages/conversations/"),
+  conversationMessages: (conversationId) =>
+    request(`/messages/conversations/${conversationId}/messages/`),
+  sendConversationMessage: (conversationId, body) =>
+    request(`/messages/conversations/${conversationId}/messages/`, { method: "POST", body }),
+  messageAudio: async (messageId) => {
+    const token = localStorage.getItem("agri_token");
+    const response = await fetch(`${API_URL}/messages/${messageId}/audio/`, {
+      headers: token ? { Authorization: `Token ${token}` } : {},
+    });
+    if (!response.ok) throw new Error("Impossible de lire ce message vocal.");
+    return response.blob();
+  },
+
   updateCulture: (id, body) =>
     request(`/mes-cultures/${id}/`, {
       method: "PATCH",
@@ -227,6 +276,12 @@ export const api = {
       method: "POST",
       body: formData,
     }),
+
+  agriculturalChat: (body) =>
+    request("/ia/chat/", { method: "POST", body }),
+
+  chatbot: (body) =>
+    request("/chatbot/", { method: "POST", body }),
 
   adminFarmers: () =>
     request("/admin/agriculteurs/"),

@@ -1,17 +1,23 @@
 import { authService } from "../../services/authService";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Camera,
   CalendarDays,
+  ClipboardList,
   CloudRain,
   Droplets,
   Image as ImageIcon,
   Leaf,
+  LayoutDashboard,
+  LogOut,
   MapPin,
   Pencil,
   Plus,
   Save,
+  CloudSun,
+  Sparkles,
+  ShoppingBag,
   Sprout,
   Sun,
   UserRound,
@@ -25,6 +31,8 @@ import { cultureService } from "../../services/cultureService";
 import { calendrierService } from "../../services/calendrierService";
 import { meteoService } from "../../services/meteoService";
 import { iaService } from "../../services/iaService";
+import MessagesNavLink from "../../components/MessagesNavLink";
+import AgriculturalChat from "../../components/AgriculturalChat";
 
 function getCultureName(culture) {
   return (
@@ -110,11 +118,140 @@ function formatDateRange(dateStart, dateEnd) {
   return `${formatDate(dateStart)} → ${formatDate(dateEnd)}`;
 }
 
+function YieldPredictionCard({ prediction, loading, error }) {
+  const formatKg = (value) => new Intl.NumberFormat("fr-FR", {
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+      <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Prévision indicative</span>
+      <h2 className="mt-1 text-2xl font-bold">Estimation de récolte</h2>
+      {loading ? <p className="mt-4 text-muted">Calcul des informations disponibles…</p> : null}
+      {error ? <p role="status" className="mt-4 text-sm text-muted">{error}</p> : null}
+      {!loading && prediction ? (
+        <>
+          {prediction.rendement_estime_kg_ha != null ? (
+            <div className="mt-4 rounded-xl bg-sand p-4 text-ink">
+              <p className="text-sm text-muted">Récolte estimée</p>
+              <p className="mt-1 text-2xl font-extrabold text-primary">
+                {prediction.quantite_totale_estimee_kg != null
+                  ? `≈ ${formatKg(prediction.quantite_totale_estimee_kg)} kg`
+                  : `${formatKg(prediction.rendement_estime_kg_ha)} kg/ha`}
+              </p>
+              {prediction.quantite_totale_estimee_kg != null ? (
+                <p className="mt-1 text-sm">
+                  Soit environ {formatKg(prediction.rendement_estime_kg_ha)} kg par hectare.
+                </p>
+              ) : null}
+              {prediction.recolte_prevue?.date_debut ? (
+                <p className="mt-2 text-sm">
+                  Période estimée : {formatDate(prediction.recolte_prevue.date_debut)}
+                  {prediction.recolte_prevue.date_fin && prediction.recolte_prevue.date_fin !== prediction.recolte_prevue.date_debut
+                    ? ` – ${formatDate(prediction.recolte_prevue.date_fin)}`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl bg-sand p-4 text-sm text-ink">
+              Pas assez de données locales pour estimer cette récolte.
+            </p>
+          )}
+          {prediction.explication_prevision ? (
+            <p className="mt-3 text-sm text-muted">{prediction.explication_prevision}</p>
+          ) : null}
+          {prediction.avancement_cycle ? (
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-semibold">
+                  {prediction.avancement_cycle.indicatif ? "Cycle estimé" : "Avancement du cycle"}
+                </span>
+                <span className="font-bold text-primary">{prediction.avancement_cycle.pourcentage}%</span>
+              </div>
+              <div
+                className="h-3 overflow-hidden rounded-full bg-sand"
+                role="progressbar"
+                aria-label="Avancement du cycle cultural"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={prediction.avancement_cycle.pourcentage}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${prediction.avancement_cycle.pourcentage}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </article>
+  );
+}
+
+function FarmerWorkspaceNav({ activeSection, setActiveSection, onLogout }) {
+  return (
+    <nav className="sticky top-0 z-40 w-full overflow-x-auto border-b border-earth bg-white shadow-sm">
+      <div className="flex min-w-max items-center gap-2 px-3 py-2 sm:px-6 lg:w-full lg:min-w-0 lg:px-[5%]">
+        {[
+          ["overview", "Vue d'ensemble", LayoutDashboard],
+          ["cultures", "Mes cultures", Leaf],
+          ["calendar", "Calendrier", CalendarDays],
+          ["weather", "Météo", CloudSun],
+          ["ai", "Assistant IA", Sparkles],
+          ["profile", "Mon profil", UserRound],
+        ].map(([id, label, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveSection(id)}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+              activeSection === id
+                ? "bg-primary text-white"
+                : "text-muted hover:bg-soft hover:text-primary"
+            }`}
+          >
+            <Icon size={16} /> {label}
+          </button>
+        ))}
+        <MessagesNavLink
+          label="Mes acheteurs"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-soft hover:text-primary"
+        />
+        <Link to="/transactions?tab=orders" className="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-soft hover:text-primary"><ClipboardList size={16} /> Mes commandes</Link>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl border border-earth px-4 py-2.5 text-sm font-semibold text-muted transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+        >
+          <LogOut size={16} />
+          Se déconnecter
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [cultures, setCultures] = useState([]);
   const [selectedCulture, setSelectedCulture] = useState(null);
+  const [cultureFilter, setCultureFilter] = useState("");
+  const [regionFilter, setRegionFilter] = useState("");
+  const [systemFilter, setSystemFilter] = useState("");
+  const [marketForm, setMarketForm] = useState({
+    statut_recolte: "in_progress",
+    quantite_disponible_vente: "",
+    unite_disponible_vente: "kg",
+    prix_kg_fcfa: "",
+  });
+  const [marketSaving, setMarketSaving] = useState(false);
+  const [marketError, setMarketError] = useState("");
+  const [marketNotice, setMarketNotice] = useState("");
 
   /*
    * SERVICES ACTUELS
@@ -126,6 +263,9 @@ export default function Dashboard() {
    */
   const [calendar, setCalendar] = useState(null);
   const [weather, setWeather] = useState(null);
+  const [yieldPrediction, setYieldPrediction] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [servicesLoading, setServicesLoading] = useState(false);
@@ -146,6 +286,11 @@ export default function Dashboard() {
    */
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  async function handleLogout() {
+    await logout();
+    navigate("/");
+  }
 
   /*
    * Deux références différentes :
@@ -193,7 +338,8 @@ export default function Dashboard() {
         const list = Array.isArray(data) ? data : [];
 
         setCultures(list);
-        setSelectedCulture(list[0] || null);
+        const createdId = location.state?.createdCultureId;
+        setSelectedCulture(list.find((item) => String(item.id) === String(createdId)) || list[0] || null);
       } catch (err) {
         setError(
           err.message ||
@@ -205,7 +351,43 @@ export default function Dashboard() {
     }
 
     loadCultures();
-  }, []);
+  }, [location.state]);
+
+  useEffect(() => {
+    setMarketForm({
+      statut_recolte: selectedCulture?.statut_recolte || "in_progress",
+      quantite_disponible_vente: selectedCulture?.quantite_disponible_vente ?? "",
+      unite_disponible_vente: selectedCulture?.unite_disponible_vente || "kg",
+      prix_kg_fcfa: selectedCulture?.prix_kg_fcfa ?? "",
+    });
+    setMarketError("");
+    setMarketNotice("");
+  }, [selectedCulture?.id]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadYieldPrediction() {
+      if (!selectedCulture?.id) {
+        setYieldPrediction(null);
+        return;
+      }
+      setPredictionLoading(true);
+      setPredictionError("");
+      try {
+        const data = await cultureService.getYieldPrediction(selectedCulture.id);
+        if (active) setYieldPrediction(data);
+      } catch (err) {
+        if (active) {
+          setYieldPrediction(null);
+          setPredictionError(err.message || "La prévision est momentanément indisponible.");
+        }
+      } finally {
+        if (active) setPredictionLoading(false);
+      }
+    }
+    loadYieldPrediction();
+    return () => { active = false; };
+  }, [selectedCulture?.id]);
 
   /*
    * Chargement du calendrier + météo
@@ -215,15 +397,20 @@ export default function Dashboard() {
    * La météo ne dépend PAS du module hydrique.
    */
   useEffect(() => {
+    let active = true;
+
     async function loadCultureServices() {
       if (!selectedCulture?.id) {
         setCalendar(null);
         setWeather(null);
+        setServicesLoading(false);
         return;
       }
 
       setServicesLoading(true);
       setError("");
+      setCalendar(null);
+      setWeather(null);
 
       try {
         const [calendarData, weatherData] =
@@ -236,19 +423,29 @@ export default function Dashboard() {
             ),
           ]);
 
-        setCalendar(calendarData);
-        setWeather(weatherData);
+        if (active) {
+          setCalendar(calendarData);
+          setWeather(weatherData);
+        }
       } catch (err) {
-        setError(
-          err.message ||
-            "Impossible de charger les informations de votre culture."
-        );
+        if (active) {
+          setError(
+            err.message ||
+              "Impossible de charger les informations de votre culture."
+          );
+        }
       } finally {
-        setServicesLoading(false);
+        if (active) {
+          setServicesLoading(false);
+        }
       }
     }
 
     loadCultureServices();
+
+    return () => {
+      active = false;
+    };
   }, [selectedCulture]);
 
   /*
@@ -258,6 +455,20 @@ export default function Dashboard() {
     () => getCultureName(selectedCulture),
     [selectedCulture]
   );
+
+  const filteredCultures = useMemo(() => cultures.filter((culture) => (
+    (!cultureFilter || String(culture.culture) === cultureFilter)
+    && (!regionFilter || String(culture.region) === regionFilter)
+    && (!systemFilter || culture.systeme_culture === systemFilter)
+  )), [cultures, cultureFilter, regionFilter, systemFilter]);
+
+  useEffect(() => {
+    if (!filteredCultures.length && selectedCulture) {
+      setSelectedCulture(null);
+    } else if (filteredCultures.length && !filteredCultures.some((culture) => culture.id === selectedCulture?.id)) {
+      setSelectedCulture(filteredCultures[0]);
+    }
+  }, [filteredCultures, selectedCulture?.id]);
 
   /*
    * Prochaine opération provenant directement
@@ -498,6 +709,29 @@ export default function Dashboard() {
     }
   }
 
+  async function saveMarketData(event) {
+    event.preventDefault();
+    if (!selectedCulture?.id) return;
+    setMarketSaving(true);
+    setMarketError("");
+    setMarketNotice("");
+    try {
+      const updated = await cultureService.updateCulture(selectedCulture.id, {
+        ...marketForm,
+        quantite_disponible_vente: marketForm.quantite_disponible_vente === "" ? null : marketForm.quantite_disponible_vente,
+        unite_disponible_vente: marketForm.quantite_disponible_vente === "" ? "" : marketForm.unite_disponible_vente,
+        prix_kg_fcfa: marketForm.prix_kg_fcfa === "" ? null : marketForm.prix_kg_fcfa,
+      });
+      setCultures((current) => current.map((crop) => crop.id === updated.id ? updated : crop));
+      setSelectedCulture(updated);
+      setMarketNotice("Les informations de récolte et de vente sont enregistrées.");
+    } catch (saveError) {
+      setMarketError(saveError.message || "Impossible d’enregistrer ces informations.");
+    } finally {
+      setMarketSaving(false);
+    }
+  }
+
   /*
    * Chargement initial
    */
@@ -519,6 +753,11 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-[80vh] bg-sand">
+      <FarmerWorkspaceNav
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+        onLogout={handleLogout}
+      />
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
 
         {/* =====================================================
@@ -553,38 +792,47 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {cultures.length > 0 && (
+          <section className="mb-6 rounded-2xl border border-earth bg-white p-4 shadow-sm sm:p-5" aria-label="Filtres des cultures enregistrées">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-semibold text-ink">Filtrer mes cultures</h2>
+              <span className="text-sm text-muted">{filteredCultures.length} culture{filteredCultures.length > 1 ? "s" : ""} affichée{filteredCultures.length > 1 ? "s" : ""}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium text-ink">
+                Culture
+                <select value={cultureFilter} onChange={(event) => setCultureFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Toutes les cultures</option>
+                  {[...new Map(cultures.map((culture) => [String(culture.culture), getCultureName(culture)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Région
+                <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Toutes les régions</option>
+                  {[...new Map(cultures.map((culture) => [String(culture.region), culture.region_nom || culture.region?.nom || "Région"]))].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Système de culture
+                <select value={systemFilter} onChange={(event) => setSystemFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Tous les systèmes</option>
+                  <option value="pluvial">Pluvial</option>
+                  <option value="irrigue">Irrigué</option>
+                  <option value="mixte">Mixte</option>
+                </select>
+              </label>
+            </div>
+          </section>
+        )}
+
+        {cultures.length > 0 && filteredCultures.length === 0 && (
+          <section className="mb-6 rounded-2xl border border-earth bg-white p-6 text-center text-muted">
+            Aucune culture enregistrée ne correspond à ces filtres.
+          </section>
+        )}
+
         <ErrorMessage message={error} />
-
-        {/* =====================================================
-            NAVIGATION
-        ====================================================== */}
-
-        <nav className="mb-6 overflow-x-auto rounded-2xl border border-earth bg-white p-2 shadow-sm">
-          <div className="flex min-w-max gap-2">
-
-            {[
-              ["overview", "Vue d'ensemble"],
-              ["cultures", "Mes cultures"],
-              ["calendar", "Calendrier"],
-              ["weather", "Météo"],
-              ["ai", "Assistant IA"],
-              ["profile", "Mon profil"],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveSection(id)}
-                className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                  activeSection === id
-                    ? "bg-primary text-white"
-                    : "text-muted hover:bg-soft hover:text-primary"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </nav>
 
         {profileSaved && (
           <div className="mb-5 rounded-xl border border-primary/20 bg-soft px-4 py-3 text-sm font-semibold text-primary">
@@ -642,7 +890,7 @@ export default function Dashboard() {
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
-                  {cultures.map((culture) => {
+                  {filteredCultures.map((culture) => {
                     const active =
                       selectedCulture?.id === culture.id;
 
@@ -720,11 +968,10 @@ export default function Dashboard() {
             ================================================== */}
 
             {activeSection === "overview" && (
-              <section className="space-y-5">
+              <section className="grid items-stretch gap-5 lg:grid-cols-2">
 
                 {/* Résumé culture + prochaine opération */}
 
-                <div className="grid gap-5 lg:grid-cols-2">
 
                   {/* MA CULTURE */}
 
@@ -777,7 +1024,7 @@ export default function Dashboard() {
                     <div className="mt-3 rounded-xl bg-sand p-4">
 
                       <p className="text-sm text-muted">
-                        Fin prévue
+                        {calendar?.fin_prevue_indicative ? "Fin estimée (indicative)" : "Fin prévue"}
                       </p>
 
                       <strong className="mt-1 block">
@@ -788,6 +1035,38 @@ export default function Dashboard() {
 
                     </div>
                   </article>
+
+                <YieldPredictionCard
+                  prediction={yieldPrediction}
+                  loading={predictionLoading}
+                  error={predictionError}
+                />
+
+                <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary"><ShoppingBag size={23} /></div>
+                    <div><span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Vente et récolte</span><h2 className="mt-1 text-2xl font-bold">Publier cette récolte</h2></div>
+                  </div>
+                  <form onSubmit={saveMarketData} className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-ink sm:col-span-2">Statut de la récolte
+                      <select value={marketForm.statut_recolte} onChange={(event) => setMarketForm((current) => ({ ...current, statut_recolte: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5">
+                        <option value="in_progress">En cours de récolte</option><option value="available">Disponible à la vente</option><option value="harvested">Récoltée</option><option value="exhausted">Épuisée</option><option value="unavailable">Indisponible</option><option value="cancelled">Annulée</option>
+                      </select>
+                    </label>
+                    <label className="text-sm font-medium text-ink">Quantité réellement disponible
+                      <input type="number" min="0" step="0.001" value={marketForm.quantite_disponible_vente} onChange={(event) => setMarketForm((current) => ({ ...current, quantite_disponible_vente: event.target.value }))} placeholder="Stock récolté disponible" className="mt-1.5 w-full rounded-xl border border-earth px-3 py-2.5" />
+                    </label>
+                    <label className="text-sm font-medium text-ink">Unité
+                      <select value={marketForm.unite_disponible_vente} onChange={(event) => setMarketForm((current) => ({ ...current, unite_disponible_vente: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5"><option value="kg">Kilogrammes</option><option value="tonne">Tonnes</option></select>
+                    </label>
+                    <label className="text-sm font-medium text-ink sm:col-span-2">Prix facultatif (FCFA/kg)
+                      <input type="number" min="0.01" step="0.01" value={marketForm.prix_kg_fcfa} onChange={(event) => setMarketForm((current) => ({ ...current, prix_kg_fcfa: event.target.value }))} placeholder="Laisser vide si le prix est à discuter" className="mt-1.5 w-full rounded-xl border border-earth px-3 py-2.5" />
+                    </label>
+                    {marketError ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{marketError}</p> : null}
+                    {marketNotice ? <p role="status" className="text-sm font-semibold text-primary sm:col-span-2">{marketNotice}</p> : null}
+                    <button type="submit" disabled={marketSaving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50 sm:col-span-2"><Save size={17} /> {marketSaving ? "Enregistrement…" : "Enregistrer le statut et le stock"}</button>
+                  </form>
+                </article>
 
                   {/* PROCHAINE OPÉRATION */}
 
@@ -851,14 +1130,12 @@ export default function Dashboard() {
                     )}
 
                   </article>
-                </div>
 
                 {/* =================================================
                     MÉTÉO + CONSEIL DANS OVERVIEW
                     CÔTE À CÔTE SUR GRAND ÉCRAN
                 ================================================== */}
 
-                <div className="grid gap-5 lg:grid-cols-2">
 
                   {/* MÉTÉO */}
 
@@ -984,8 +1261,6 @@ export default function Dashboard() {
 
                   </article>
 
-                </div>
-
               </section>
             )}
 
@@ -1022,7 +1297,7 @@ export default function Dashboard() {
                       </p>
 
                       <p>
-                        Fin prévue :{" "}
+                        {calendar?.fin_prevue_indicative ? "Fin estimée (indicative) : " : "Fin prévue : "}{" "}
                         <strong className="text-ink">
                           {formatDate(
                             calendar?.fin_prevue
@@ -1316,7 +1591,9 @@ export default function Dashboard() {
             ================================================== */}
 
             {activeSection === "ai" && (
-              <section className="grid gap-5 lg:grid-cols-2">
+              <section className="space-y-5">
+                <AgriculturalChat />
+                <div className="grid gap-5 lg:grid-cols-2">
 
                 {/* =================================================
                     CARTE PHOTO
@@ -1578,6 +1855,7 @@ export default function Dashboard() {
 
                 </article>
 
+                </div>
               </section>
             )}
 

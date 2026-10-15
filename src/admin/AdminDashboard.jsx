@@ -1612,6 +1612,38 @@ export default function AdminDashboard() {
     0
   );
 
+  const activeFarmers = farmers.filter((farmer) => farmer.is_active).length;
+
+  const cropDistribution = useMemo(() => {
+    const counts = new Map();
+    farmers.forEach((farmer) => {
+      (Array.isArray(farmer.cultures) ? farmer.cultures : []).forEach((culture) => {
+        const name = culture.culture_nom || culture.culture?.nom || culture.culture || "Culture non renseignée";
+        counts.set(name, (counts.get(name) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, "fr"));
+  }, [farmers]);
+
+  const regionDistribution = useMemo(() => {
+    const counts = new Map();
+    farmers.forEach((farmer) => {
+      (Array.isArray(farmer.cultures) ? farmer.cultures : []).forEach((culture) => {
+        const region = culture.region_nom || culture.region?.nom || "Région non renseignée";
+        counts.set(region, (counts.get(region) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, "fr"));
+  }, [farmers]);
+
+  const coveredRegions = regionDistribution.filter(
+    ({ label }) => label !== "Région non renseignée"
+  ).length;
+
   return (
     <div className="min-h-screen bg-sand">
       {/* MOBILE HEADER */}
@@ -1809,25 +1841,32 @@ export default function AdminDashboard() {
                     />
 
                     <AdminStat
+                      icon={Users}
+                      label="Comptes actifs"
+                      value={activeFarmers}
+                    />
+
+                    <AdminStat
                       icon={Sprout}
                       label="Cultures suivies"
                       value={totalCultures}
                     />
 
                     <AdminStat
-                      icon={Leaf}
-                      label="Cultures officielles"
-                      value={
-                        officialCultureReferences.length ||
-                        10
-                      }
+                      icon={CalendarDays}
+                      label="Régions couvertes"
+                      value={coveredRegions}
+                    />
+                  </div>
+
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <DonutChart
+                      title="Cultures suivies"
+                      description="Parcelles enregistrées par culture"
+                      data={cropDistribution}
                     />
 
-                    <AdminStat
-                      icon={CalendarDays}
-                      label="Modules"
-                      value={6}
-                    />
+                    <RegionBarChart data={regionDistribution} />
                   </div>
 
                   <div className="grid gap-5 xl:grid-cols-2">
@@ -2635,6 +2674,103 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+const CHART_COLORS = ["#047443", "#3B9B68", "#A1CDAF", "#E1B45A", "#7297A8", "#D48B67", "#7E78A8", "#9B7A55", "#55A6A0", "#A4A4A4"];
+
+function DonutChart({ title, description, data }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const circumference = 2 * Math.PI * 42;
+  const segments = data.map((item, index) => ({
+    ...item,
+    color: CHART_COLORS[index % CHART_COLORS.length],
+    length: total ? (item.value / total) * circumference : 0,
+    offset: data
+      .slice(0, index)
+      .reduce((sum, previous) => sum + (previous.value / total) * circumference, 0),
+  }));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold">{title}</h2>
+        <p className="mt-1 text-sm text-muted">{description}</p>
+      </div>
+
+      {total === 0 ? (
+        <p className="mt-6 rounded-xl bg-sand p-4 text-sm text-muted">Aucune culture enregistrée pour le moment.</p>
+      ) : (
+        <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row">
+          <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`${total} cultures suivies, réparties par culture`}>
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+              <circle cx="60" cy="60" r="42" fill="none" stroke="#E8E3D7" strokeWidth="16" />
+              {segments.map((item) => {
+                return (
+                  <circle
+                    key={item.label}
+                    cx="60"
+                    cy="60"
+                    r="42"
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth="16"
+                    strokeDasharray={`${item.length} ${circumference - item.length}`}
+                    strokeDashoffset={-item.offset}
+                  />
+                );
+              })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-bold text-[#18382A]">{total}</span>
+              <span className="text-xs text-muted">parcelles</span>
+            </div>
+          </div>
+
+          <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+            {data.map((item, index) => (
+              <li key={item.label} className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                <span className="truncate text-muted" title={item.label}>{item.label}</span>
+                <strong className="ml-auto">{item.value}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function RegionBarChart({ data }) {
+  const visibleRegions = data.filter(({ label }) => label !== "Région non renseignée").slice(0, 7);
+  const maximum = Math.max(1, ...visibleRegions.map((item) => item.value));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold">Activité par région</h2>
+        <p className="mt-1 text-sm text-muted">Cultures suivies enregistrées dans chaque région</p>
+      </div>
+
+      {visibleRegions.length === 0 ? (
+        <p className="mt-6 rounded-xl bg-sand p-4 text-sm text-muted">Les régions apparaîtront ici dès que des cultures y seront enregistrées.</p>
+      ) : (
+        <div className="mt-6 space-y-4" role="img" aria-label="Nombre de cultures suivies par région">
+          {visibleRegions.map((item) => (
+            <div key={item.label}>
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-medium" title={item.label}>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-[#EAF1E8]">
+                <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.max(5, (item.value / maximum) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 
