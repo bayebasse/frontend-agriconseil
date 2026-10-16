@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
 import { useAuth } from "../../contexts/AuthContext";
+import { isValidSenegalPhone, usernameContainsDigits } from "../../utils/accountValidation";
 
 export default function Register() {
   const { register } = useAuth();
@@ -15,6 +16,7 @@ export default function Register() {
     last_name: "",
     email: "",
     telephone: "",
+    role: "farmer",
   });
 
   const [error, setError] = useState("");
@@ -23,9 +25,19 @@ export default function Register() {
     event.preventDefault();
     setError("");
 
+    if (usernameContainsDigits(form.username)) {
+      setError("Le nom d'utilisateur ne doit pas contenir de chiffres.");
+      return;
+    }
+
+    if (form.telephone.trim() && !isValidSenegalPhone(form.telephone)) {
+      setError("Saisissez un numéro sénégalais valide commençant par 76, 77 ou 78 (9 chiffres, indicatif +221 facultatif).");
+      return;
+    }
+
     try {
-      await register(form);
-      navigate("/dashboard");
+      const newUser = await register(form);
+      navigate(newUser.role === "buyer" ? "/acheteur" : "/dashboard");
     } catch (err) {
       setError(err.message);
     }
@@ -54,6 +66,17 @@ export default function Register() {
             </div>
 
             <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
+              <label className="text-sm font-semibold text-ink">
+                Type de compte
+                <select
+                  value={form.role}
+                  onChange={(event) => setForm({ ...form, role: event.target.value })}
+                  className="mt-1 w-full rounded-md border border-earth bg-white px-4 py-3 font-normal"
+                >
+                  <option value="farmer">Agriculteur</option>
+                  <option value="buyer">Acheteur</option>
+                </select>
+              </label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   type="text"
@@ -100,8 +123,12 @@ export default function Register() {
 
               <input
                 type="tel"
+                name="telephone"
                 placeholder="Téléphone"
                 value={form.telephone}
+                autoComplete="tel"
+                pattern="(?:\+221[ .-]?)?(?:76|77|78)(?:[ .-]?[0-9]){7}"
+                title="Numéro sénégalais commençant par 76, 77 ou 78, avec 9 chiffres. L’indicatif +221 est facultatif."
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -113,8 +140,12 @@ export default function Register() {
 
               <input
                 type="text"
+                name="username"
                 placeholder="Nom d'utilisateur"
                 value={form.username}
+                autoComplete="username"
+                pattern="[^0-9]+"
+                title="Le nom d'utilisateur ne doit pas contenir de chiffres."
                 onChange={(event) =>
                   setForm({
                     ...form,

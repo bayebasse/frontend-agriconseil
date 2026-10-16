@@ -1,30 +1,61 @@
 import { useEffect, useState } from "react";
 import { CloudSun, MapPin } from "lucide-react";
 
+import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
 import Loading from "../../components/Loading/Loading";
 import { meteoService } from "../../services/meteoService";
 
 export default function Meteo({ culture }) {
+  if (!culture?.id) return null;
+
+  return <MeteoForCulture key={culture.id} culture={culture} />;
+}
+
+function MeteoForCulture({ culture }) {
   const [weather, setWeather] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    if (!culture) return;
+    let active = true;
 
-    setLoading(true);
+    async function loadWeather() {
+      try {
+        const data = await meteoService.getWeather(culture.id);
+        if (active) setWeather(data);
+      } catch (err) {
+        if (active) setError(err.message || "Impossible de charger la météo.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
 
-    meteoService
-      .getWeather(culture.id)
-      .then(setWeather)
-      .finally(() => setLoading(false));
-  }, [culture]);
+    loadWeather();
+    return () => {
+      active = false;
+    };
+  }, [culture?.id, retry]);
 
-  if (!culture) {
-    return null;
-  }
+  if (loading) return <Loading />;
 
-  if (loading) {
-    return <Loading />;
+  if (error) {
+    return (
+      <section className="rounded-[10px] border border-earth bg-sand p-6">
+        <ErrorMessage message={error} />
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setLoading(true);
+            setRetry((value) => value + 1);
+          }}
+          className="mt-4 rounded-md border border-primary px-4 py-2 font-semibold text-primary"
+        >
+          Réessayer
+        </button>
+      </section>
+    );
   }
 
   return (
@@ -34,33 +65,26 @@ export default function Meteo({ culture }) {
           <MapPin size={18} className="text-primary" />
           {culture.localisation}
         </span>
-
         <CloudSun size={24} className="text-primary" />
       </div>
 
-      <div className="mt-8 flex items-end justify-between gap-5">
-        <div>
-          <div className="font-display text-[58px] font-medium leading-none text-ink">
-            {weather?.temperature ?? "—"}°
+      {!weather ? (
+        <p className="mt-8 text-muted">Aucune donnée météo disponible pour cette culture.</p>
+      ) : (
+        <div className="mt-8 flex items-end justify-between gap-5">
+          <div>
+            <div className="font-display text-[58px] font-medium leading-none text-ink">
+              {weather.temperature ?? "—"}°
+            </div>
+            <p className="mt-2 text-muted">Météo locale</p>
           </div>
-
-          <p className="mt-2 text-muted">Météo locale</p>
+          <div className="grid gap-2 text-sm text-muted">
+            <span>💧 {weather.humidite ?? "—"}% humidité</span>
+            <span>💨 {weather.vent_kmh ?? "—"} km/h</span>
+            <span>🌧️ {weather.precipitation_mm ?? "—"} mm</span>
+          </div>
         </div>
-
-        <div className="grid gap-2 text-sm text-muted">
-          <span>
-            💧 {weather?.humidite ?? "—"}% humidité
-          </span>
-
-          <span>
-            💨 {weather?.vent_kmh ?? "—"} km/h
-          </span>
-
-          <span>
-            🌧️ {weather?.precipitation_mm ?? "—"} mm
-          </span>
-        </div>
-      </div>
+      )}
     </section>
   );
 }

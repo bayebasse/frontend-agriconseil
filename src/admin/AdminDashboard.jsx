@@ -1207,6 +1207,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { adminService } from "../services/adminService";
 import { cultureService } from "../services/cultureService";
+import { isValidSenegalPhone, usernameContainsDigits } from "../utils/accountValidation";
 
 const OFFICIAL_CROPS = [
   "Riz",
@@ -1234,6 +1235,25 @@ const OFFICIAL_CULTURE_CODES = [
   "pasteque",
 ];
 
+function formatAdminDate(value, includeTime = false) {
+  if (!value) return "Non renseignée";
+  const parsed = new Date(value.length === 10 ? `${value}T12:00:00` : value);
+  if (Number.isNaN(parsed.getTime())) return "Non renseignée";
+  return parsed.toLocaleString("fr-FR", includeTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "long" });
+}
+
+function getTransactionStatusLabel(status) {
+  return {
+    pending: "En attente",
+    confirmed: "Confirmée",
+    refused: "Refusée",
+    cancelled: "Annulée",
+    delivered: "Livrée",
+  }[status] || status || "Statut inconnu";
+}
+
 const MENU = [
   {
     id: "overview",
@@ -1246,19 +1266,19 @@ const MENU = [
     icon: Users,
   },
   {
-    id: "cultures",
-    label: "Cultures",
-    icon: Sprout,
+    id: "buyers",
+    label: "Acheteurs",
+    icon: Users,
+  },
+  {
+    id: "orders",
+    label: "Commandes",
+    icon: ClipboardList,
   },
   {
     id: "calendar",
     label: "Calendriers",
     icon: CalendarDays,
-  },
-  {
-    id: "data",
-    label: "Données agricoles",
-    icon: ClipboardList,
   },
   {
     id: "profile",
@@ -1275,6 +1295,14 @@ export default function AdminDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [farmers, setFarmers] = useState([]);
+
+  const [buyers, setBuyers] = useState([]);
+
+  const [orders, setOrders] = useState([]);
+
+  const [reservations, setReservations] = useState([]);
+
+  const [trackedCalendars, setTrackedCalendars] = useState([]);
 
   const [cultureReferences, setCultureReferences] = useState([]);
 
@@ -1313,9 +1341,12 @@ export default function AdminDashboard() {
     setError("");
 
     try {
-      const [farmersData, cultureData] = await Promise.all([
+      const [farmersData, cultureData, buyersData, transactionsData, calendarsData] = await Promise.all([
         adminService.getFarmers(),
         cultureService.getCultureReferences(),
+        adminService.getBuyers(),
+        adminService.getTransactions(),
+        adminService.getTrackedCalendars(),
       ]);
 
       const farmersResult = Array.isArray(farmersData)
@@ -1328,6 +1359,10 @@ export default function AdminDashboard() {
 
       setFarmers(farmersResult);
       setCultureReferences(culturesResult);
+      setBuyers(Array.isArray(buyersData) ? buyersData : buyersData?.results || []);
+      setOrders(Array.isArray(transactionsData?.orders) ? transactionsData.orders : []);
+      setReservations(Array.isArray(transactionsData?.reservations) ? transactionsData.reservations : []);
+      setTrackedCalendars(Array.isArray(calendarsData) ? calendarsData : calendarsData?.results || []);
     } catch (err) {
       console.error("Erreur chargement admin :", err);
 
@@ -1381,6 +1416,54 @@ export default function AdminDashboard() {
     });
   }, [farmers, search]);
 
+  const filteredBuyers = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (!query) return buyers;
+    return buyers.filter((buyer) => [
+      buyer.first_name,
+      buyer.last_name,
+      buyer.username,
+      buyer.email,
+      buyer.telephone,
+    ].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [buyers, search]);
+
+  const filteredOrders = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (!query) return orders;
+    return orders.filter((order) => [
+      order.buyer_name,
+      order.farmer_name,
+      order.culture_nom,
+      order.statut,
+      String(order.id),
+    ].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [orders, search]);
+
+  const filteredReservations = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (!query) return reservations;
+    return reservations.filter((reservation) => [
+      reservation.buyer_name,
+      reservation.farmer_name,
+      reservation.culture_nom,
+      reservation.statut,
+      String(reservation.id),
+    ].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [reservations, search]);
+
+  const filteredCalendars = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (!query) return trackedCalendars;
+    return trackedCalendars.filter((calendar) => [
+      calendar.culture_nom,
+      calendar.farmer_name,
+      calendar.region_nom,
+      calendar.departement_nom,
+      calendar.commune_nom,
+    ].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [trackedCalendars, search]);
+
   function closeModal() {
     setModal(null);
     setSelectedFarmer(null);
@@ -1427,6 +1510,16 @@ export default function AdminDashboard() {
     event.preventDefault();
 
     setError("");
+
+    if (usernameContainsDigits(farmerForm.username)) {
+      setError("Le nom d'utilisateur ne doit pas contenir de chiffres.");
+      return;
+    }
+
+    if (!isValidSenegalPhone(farmerForm.telephone)) {
+      setError("Saisissez un numéro sénégalais valide commençant par 76, 77 ou 78 (9 chiffres, indicatif +221 facultatif).");
+      return;
+    }
 
     try {
       let farmer;
@@ -1612,6 +1705,38 @@ export default function AdminDashboard() {
     0
   );
 
+  const activeFarmers = farmers.filter((farmer) => farmer.is_active).length;
+
+  const cropDistribution = useMemo(() => {
+    const counts = new Map();
+    farmers.forEach((farmer) => {
+      (Array.isArray(farmer.cultures) ? farmer.cultures : []).forEach((culture) => {
+        const name = culture.culture_nom || culture.culture?.nom || culture.culture || "Culture non renseignée";
+        counts.set(name, (counts.get(name) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, "fr"));
+  }, [farmers]);
+
+  const regionDistribution = useMemo(() => {
+    const counts = new Map();
+    farmers.forEach((farmer) => {
+      (Array.isArray(farmer.cultures) ? farmer.cultures : []).forEach((culture) => {
+        const region = culture.region_nom || culture.region?.nom || "Région non renseignée";
+        counts.set(region, (counts.get(region) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, "fr"));
+  }, [farmers]);
+
+  const coveredRegions = regionDistribution.filter(
+    ({ label }) => label !== "Région non renseignée"
+  ).length;
+
   return (
     <div className="min-h-screen bg-sand">
       {/* MOBILE HEADER */}
@@ -1753,6 +1878,12 @@ export default function AdminDashboard() {
                   {activeMenu === "farmers" &&
                     "Gestion des agriculteurs"}
 
+                  {activeMenu === "buyers" &&
+                    "Gestion des acheteurs"}
+
+                  {activeMenu === "orders" &&
+                    "Commandes et réservations"}
+
                   {activeMenu === "cultures" &&
                     "Gestion des cultures"}
 
@@ -1809,25 +1940,32 @@ export default function AdminDashboard() {
                     />
 
                     <AdminStat
+                      icon={Users}
+                      label="Comptes actifs"
+                      value={activeFarmers}
+                    />
+
+                    <AdminStat
                       icon={Sprout}
                       label="Cultures suivies"
                       value={totalCultures}
                     />
 
                     <AdminStat
-                      icon={Leaf}
-                      label="Cultures officielles"
-                      value={
-                        officialCultureReferences.length ||
-                        10
-                      }
+                      icon={CalendarDays}
+                      label="Régions couvertes"
+                      value={coveredRegions}
+                    />
+                  </div>
+
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <DonutChart
+                      title="Cultures suivies"
+                      description="Parcelles enregistrées par culture"
+                      data={cropDistribution}
                     />
 
-                    <AdminStat
-                      icon={CalendarDays}
-                      label="Modules"
-                      value={6}
-                    />
+                    <RegionBarChart data={regionDistribution} />
                   </div>
 
                   <div className="grid gap-5 xl:grid-cols-2">
@@ -2176,6 +2314,143 @@ export default function AdminDashboard() {
                 </section>
               )}
 
+              {/* ACHETEURS */}
+              {activeMenu === "buyers" && (
+                <section className="space-y-5">
+                  <div className="relative w-full xl:max-w-md">
+                    <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Rechercher un acheteur..."
+                      className="w-full rounded-xl border border-earth bg-white py-3 pl-11 pr-4 outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="overflow-hidden rounded-[24px] border border-earth bg-white shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead className="bg-sand">
+                          <tr className="text-left text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
+                            <th className="px-6 py-4">Acheteur</th>
+                            <th className="px-6 py-4">Contact</th>
+                            <th className="px-6 py-4">Inscription</th>
+                            <th className="px-6 py-4">Commandes</th>
+                            <th className="px-6 py-4">Compte</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBuyers.map((buyer) => {
+                            const buyerOrders = orders.filter((order) => order.acheteur_id === buyer.id);
+                            return (
+                              <tr key={buyer.id} className="border-t border-earth/70">
+                                <td className="px-6 py-5">
+                                  <p className="font-bold">{buyer.first_name} {buyer.last_name}</p>
+                                  <p className="text-sm text-muted">@{buyer.username}</p>
+                                </td>
+                                <td className="px-6 py-5 text-sm">
+                                  <p>{buyer.telephone || "—"}</p>
+                                  <p className="text-muted">{buyer.email || "—"}</p>
+                                </td>
+                                <td className="px-6 py-5 text-sm">{formatAdminDate(buyer.date_joined, true)}</td>
+                                <td className="px-6 py-5">
+                                  <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">
+                                    {buyerOrders.length}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${buyer.is_active ? "bg-soft text-primary" : "bg-sand text-muted"}`}>
+                                    {buyer.is_active ? "Actif" : "Inactif"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {filteredBuyers.length === 0 && (
+                            <tr><td colSpan="5" className="px-6 py-10 text-center text-sm text-muted">Aucun acheteur trouvé.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* COMMANDES ET RESERVATIONS */}
+              {activeMenu === "orders" && (
+                <section className="space-y-6">
+                  <div className="relative w-full xl:max-w-md">
+                    <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Rechercher acheteur, agriculteur ou culture..."
+                      className="w-full rounded-xl border border-earth bg-white py-3 pl-11 pr-4 outline-none focus:border-primary"
+                    />
+                  </div>
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-xl font-bold">Commandes</h2>
+                      <span className="rounded-full bg-soft px-3 py-1 text-sm font-bold text-primary">{filteredOrders.length}</span>
+                    </div>
+                    {filteredOrders.length === 0 ? (
+                      <p className="rounded-2xl border border-earth bg-white p-6 text-sm text-muted">Aucune commande trouvée.</p>
+                    ) : (
+                      <div className="grid items-start gap-4 xl:grid-cols-2">
+                        {filteredOrders.map((order) => (
+                          <article key={order.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Commande n° {order.id}</span>
+                                <h3 className="mt-1 text-xl font-bold">{order.culture_nom || "Culture non renseignée"}</h3>
+                              </div>
+                              <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">{getTransactionStatusLabel(order.statut)}</span>
+                            </div>
+                            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                              <p className="rounded-xl bg-sand p-3">Acheteur : <strong>{order.buyer_name || "Non renseigné"}</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Agriculteur : <strong>{order.farmer_name || "Non renseigné"}</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Quantité : <strong>{order.quantite_kg} kg</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Date souhaitée : <strong>{formatAdminDate(order.date_souhaitee)}</strong></p>
+                              <p className="rounded-xl bg-sand p-3 sm:col-span-2">Créée le : <strong>{formatAdminDate(order.created_at, true)}</strong></p>
+                              {order.message ? <p className="rounded-xl bg-sand p-3 sm:col-span-2">Message : {order.message}</p> : null}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-xl font-bold">Réservations</h2>
+                      <span className="rounded-full bg-soft px-3 py-1 text-sm font-bold text-primary">{filteredReservations.length}</span>
+                    </div>
+                    {filteredReservations.length === 0 ? (
+                      <p className="rounded-2xl border border-earth bg-white p-6 text-sm text-muted">Aucune réservation pour le moment.</p>
+                    ) : (
+                      <div className="grid items-start gap-4 xl:grid-cols-2">
+                        {filteredReservations.map((reservation) => (
+                          <article key={reservation.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Réservation n° {reservation.id}</span>
+                                <h3 className="mt-1 text-xl font-bold">{reservation.culture_nom || "Culture non renseignée"}</h3>
+                              </div>
+                              <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">{getTransactionStatusLabel(reservation.statut)}</span>
+                            </div>
+                            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                              <p className="rounded-xl bg-sand p-3">Acheteur : <strong>{reservation.buyer_name || "Non renseigné"}</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Agriculteur : <strong>{reservation.farmer_name || "Non renseigné"}</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Quantité : <strong>{reservation.quantite_kg} kg</strong></p>
+                              <p className="rounded-xl bg-sand p-3">Date souhaitée : <strong>{formatAdminDate(reservation.date_disponibilite_souhaitee)}</strong></p>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </section>
+              )}
+
               {/* CULTURES */}
               {activeMenu === "cultures" && (
                 <section className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
@@ -2233,32 +2508,59 @@ export default function AdminDashboard() {
 
               {/* CALENDRIERS */}
               {activeMenu === "calendar" && (
-                <section className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
-                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">
-                    Administration
-                  </span>
-
-                  <h2 className="mt-1 font-display text-3xl">
-                    Gestion des calendriers
-                  </h2>
-
-                  <p className="mt-3 max-w-2xl leading-7 text-muted">
-                    Cette section servira à consulter et
-                    administrer les règles utilisées pour
-                    générer automatiquement les calendriers
-                    agricoles.
-                  </p>
-
-                  <div className="mt-7 rounded-2xl bg-sand p-5">
-                    <p className="font-semibold">
-                      Règles du calendrier
-                    </p>
-
-                    <p className="mt-2 text-sm leading-6 text-muted">
-                      Les durées et opérations dépendent de
-                      chaque culture et de son cycle.
-                    </p>
+                <section className="space-y-5">
+                  <div className="relative w-full xl:max-w-md">
+                    <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Rechercher un agriculteur, une culture ou une région..."
+                      className="w-full rounded-xl border border-earth bg-white py-3 pl-11 pr-4 outline-none focus:border-primary"
+                    />
                   </div>
+                  {filteredCalendars.length === 0 ? (
+                    <p className="rounded-2xl border border-earth bg-white p-6 text-sm text-muted">Aucune culture suivie trouvée.</p>
+                  ) : (
+                    <div className="grid items-start gap-4 xl:grid-cols-2">
+                      {filteredCalendars.map((calendar) => (
+                        <article key={calendar.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Calendrier agricole</span>
+                              <h2 className="mt-1 text-xl font-bold">{calendar.culture_nom}</h2>
+                              <p className="mt-1 text-sm text-muted">Agriculteur : {calendar.farmer_name}</p>
+                            </div>
+                            <CalendarDays size={22} className="shrink-0 text-primary" />
+                          </div>
+                          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                            <p className="rounded-xl bg-sand p-3">Localisation : <strong>{[calendar.commune_nom, calendar.departement_nom, calendar.region_nom].filter(Boolean).join(", ") || "Non renseignée"}</strong></p>
+                            <p className="rounded-xl bg-sand p-3">Semis : <strong>{formatAdminDate(calendar.date_semis)}</strong></p>
+                            <p className="rounded-xl bg-sand p-3">Superficie : <strong>{calendar.superficie} {calendar.unite_superficie || "ha"}</strong></p>
+                            <p className="rounded-xl bg-sand p-3">Opérations : <strong>{calendar.operations.length}</strong></p>
+                          </div>
+                          {calendar.calendar_id ? (
+                            <>
+                              <p className="mt-3 text-xs text-muted">Calendrier généré le {formatAdminDate(calendar.date_generation, true)}</p>
+                              <div className="mt-4 space-y-2">
+                                {calendar.operations.length > 0 ? calendar.operations.map((operation) => (
+                                  <div key={operation.id} className="rounded-xl border border-earth/70 p-3">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <h3 className="font-semibold">{operation.nom}</h3>
+                                      <span className="rounded-full bg-soft px-2.5 py-1 text-xs font-bold text-primary">{operation.statut}</span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted">{formatAdminDate(operation.date_debut)} – {formatAdminDate(operation.date_fin)}{operation.stade_nom ? ` · ${operation.stade_nom}` : ""}</p>
+                                    {operation.description ? <p className="mt-2 text-sm text-muted">{operation.description}</p> : null}
+                                  </div>
+                                )) : <p className="rounded-xl bg-sand p-3 text-sm text-muted">Aucune opération enregistrée pour ce calendrier.</p>}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="mt-3 rounded-xl bg-sand p-3 text-sm text-muted">Le calendrier n’a pas encore été généré pour cette culture.</p>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -2407,7 +2709,10 @@ export default function AdminDashboard() {
 
               <input
                 type="text"
+                name="username"
                 value={farmerForm.username}
+                pattern="[^0-9]+"
+                title="Le nom d'utilisateur ne doit pas contenir de chiffres."
                 onChange={(e) =>
                   setFarmerForm({
                     ...farmerForm,
@@ -2420,8 +2725,11 @@ export default function AdminDashboard() {
               />
 
               <input
-                type="text"
+                type="tel"
+                name="telephone"
                 value={farmerForm.telephone}
+                pattern="(?:\+221[ .-]?)?(?:76|77|78)(?:[ .-]?[0-9]){7}"
+                title="Numéro sénégalais commençant par 76, 77 ou 78, avec 9 chiffres. L’indicatif +221 est facultatif."
                 onChange={(e) =>
                   setFarmerForm({
                     ...farmerForm,
@@ -2635,6 +2943,103 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+const CHART_COLORS = ["#047443", "#3B9B68", "#A1CDAF", "#E1B45A", "#7297A8", "#D48B67", "#7E78A8", "#9B7A55", "#55A6A0", "#A4A4A4"];
+
+function DonutChart({ title, description, data }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const circumference = 2 * Math.PI * 42;
+  const segments = data.map((item, index) => ({
+    ...item,
+    color: CHART_COLORS[index % CHART_COLORS.length],
+    length: total ? (item.value / total) * circumference : 0,
+    offset: data
+      .slice(0, index)
+      .reduce((sum, previous) => sum + (previous.value / total) * circumference, 0),
+  }));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold">{title}</h2>
+        <p className="mt-1 text-sm text-muted">{description}</p>
+      </div>
+
+      {total === 0 ? (
+        <p className="mt-6 rounded-xl bg-sand p-4 text-sm text-muted">Aucune culture enregistrée pour le moment.</p>
+      ) : (
+        <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row">
+          <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`${total} cultures suivies, réparties par culture`}>
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+              <circle cx="60" cy="60" r="42" fill="none" stroke="#E8E3D7" strokeWidth="16" />
+              {segments.map((item) => {
+                return (
+                  <circle
+                    key={item.label}
+                    cx="60"
+                    cy="60"
+                    r="42"
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth="16"
+                    strokeDasharray={`${item.length} ${circumference - item.length}`}
+                    strokeDashoffset={-item.offset}
+                  />
+                );
+              })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-bold text-[#18382A]">{total}</span>
+              <span className="text-xs text-muted">parcelles</span>
+            </div>
+          </div>
+
+          <ul className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+            {data.map((item, index) => (
+              <li key={item.label} className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
+                <span className="truncate text-muted" title={item.label}>{item.label}</span>
+                <strong className="ml-auto">{item.value}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function RegionBarChart({ data }) {
+  const visibleRegions = data.filter(({ label }) => label !== "Région non renseignée").slice(0, 7);
+  const maximum = Math.max(1, ...visibleRegions.map((item) => item.value));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold">Activité par région</h2>
+        <p className="mt-1 text-sm text-muted">Cultures suivies enregistrées dans chaque région</p>
+      </div>
+
+      {visibleRegions.length === 0 ? (
+        <p className="mt-6 rounded-xl bg-sand p-4 text-sm text-muted">Les régions apparaîtront ici dès que des cultures y seront enregistrées.</p>
+      ) : (
+        <div className="mt-6 space-y-4" role="img" aria-label="Nombre de cultures suivies par région">
+          {visibleRegions.map((item) => (
+            <div key={item.label}>
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-medium" title={item.label}>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-[#EAF1E8]">
+                <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.max(5, (item.value / maximum) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "test": "node tests/marketActions.test.js && node tests/agriculturalChat.test.js && node tests/harvestHistory.test.js && node tests/accountValidation.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

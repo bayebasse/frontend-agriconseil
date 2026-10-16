@@ -14,10 +14,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!localStorage.getItem("agri_token")) {
+      setLoading(false);
+      return;
+    }
+
     authService
       .me()
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch(() => {
+        localStorage.removeItem("agri_token");
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 

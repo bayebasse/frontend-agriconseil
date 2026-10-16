@@ -99,11 +99,19 @@ import Register from "../pages/Auth/Register";
 import CreateCulture from "../pages/Culture/CreateCulture";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import AdminDashboard from "../admin/AdminDashboard";
+import BuyerDashboard from "../pages/Buyer/BuyerDashboard";
+import MessagesPage from "../pages/Messages/MessagesPage";
+import TransactionsPage from "../pages/Transactions/TransactionsPage";
 import { useAuth } from "../contexts/AuthContext";
 import PolitiqueConfidentialite from "../pages/PolitiqueConfidentialite/PolitiqueConfidentialite";
+import Loading from "../components/Loading/Loading";
 
 function DashboardEntry() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <Loading>Vérification de votre session…</Loading>;
+  }
 
   if (!user) {
     return <Navigate to="/connexion" replace />;
@@ -112,19 +120,26 @@ function DashboardEntry() {
   if (user.role === "admin") {
     return <Navigate to="/admin" replace />;
   }
+  if (user.role === "buyer") {
+    return <Navigate to="/acheteur" replace />;
+  }
 
   return <Dashboard />;
 }
 
 function AdminRoute() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <Loading>Vérification de votre session…</Loading>;
+  }
 
   if (!user) {
     return <Navigate to="/connexion" replace />;
   }
 
   if (user.role !== "admin") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={user.role === "buyer" ? "/acheteur" : "/dashboard"} replace />;
   }
 
   return <AdminDashboard />;
@@ -150,6 +165,10 @@ export default function AppRoutes() {
         element={<DashboardEntry />}
       />
 
+      <Route path="/acheteur" element={<BuyerRoute />} />
+      <Route path="/messages/:conversationId?" element={<MessagesEntry />} />
+      <Route path="/transactions" element={<TransactionsEntry />} />
+
       <Route
         path="/admin"
         element={<AdminRoute />}
@@ -172,7 +191,11 @@ export default function AppRoutes() {
 }
 
 function ProtectedFarmerRoute({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <Loading>Vérification de votre session…</Loading>;
+  }
 
   if (!user) {
     return <Navigate to="/connexion" replace />;
@@ -181,6 +204,39 @@ function ProtectedFarmerRoute({ children }) {
   if (user.role === "admin") {
     return <Navigate to="/admin" replace />;
   }
+  if (user.role === "buyer") {
+    return <Navigate to="/acheteur" replace />;
+  }
 
   return children;
+}
+
+function BuyerRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading>Vérification de votre session…</Loading>;
+  if (!user) return <Navigate to="/connexion" replace />;
+  if (user.role !== "buyer") {
+    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace />;
+  }
+  return <BuyerDashboard />;
+}
+
+function MessagesEntry() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading>Vérification de votre session…</Loading>;
+  if (!user) return <Navigate to="/connexion" replace />;
+  if (!(["buyer", "farmer"].includes(user.role))) {
+    return <Navigate to="/admin" replace />;
+  }
+  return <MessagesPage />;
+}
+
+function TransactionsEntry() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading>Vérification de votre session…</Loading>;
+  if (!user) return <Navigate to="/connexion" replace />;
+  if (!("buyer" === user.role || "farmer" === user.role)) {
+    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace />;
+  }
+  return <TransactionsPage />;
 }

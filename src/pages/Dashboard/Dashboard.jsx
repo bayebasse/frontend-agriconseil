@@ -1,17 +1,26 @@
 import { authService } from "../../services/authService";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Camera,
+  CalendarClock,
   CalendarDays,
+  ClipboardList,
   CloudRain,
+  CloudSun,
   Droplets,
+  History as HistoryIcon,
   Image as ImageIcon,
   Leaf,
+  LayoutDashboard,
+  LogOut,
   MapPin,
+  MessageCircle,
   Pencil,
   Plus,
   Save,
+  Sparkles,
+  ShoppingBag,
   Sprout,
   Sun,
   UserRound,
@@ -20,11 +29,18 @@ import {
 } from "lucide-react";
 
 import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
+import MessagesNavLink from "../../components/MessagesNavLink";
+import MessagesPage from "../Messages/MessagesPage";
+import TransactionsPage from "../Transactions/TransactionsPage";
 import { useAuth } from "../../contexts/AuthContext";
 import { cultureService } from "../../services/cultureService";
 import { calendrierService } from "../../services/calendrierService";
 import { meteoService } from "../../services/meteoService";
 import { iaService } from "../../services/iaService";
+import { buyerService } from "../../services/buyerService";
+import { transactionService } from "../../services/transactionService";
+import { getPastHarvestDate } from "../../utils/harvestHistory";
+import { isValidSenegalPhone } from "../../utils/accountValidation";
 
 function getCultureName(culture) {
   return (
@@ -87,6 +103,16 @@ function parseKnowledgeSections(content) {
     .filter((section) => section.title && section.text);
 }
 
+function getList(data, label) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+  throw new Error(`Format inattendu pour ${label}.`);
+}
+
 function formatDate(date) {
   if (!date) {
     return "—";
@@ -103,6 +129,17 @@ function formatDate(date) {
     month: "long",
     year: "numeric",
   });
+}
+
+function formatHistoryTimestamp(value) {
+  if (!value) {
+    return "Date non renseignée";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date non renseignée"
+    : date.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function formatShortDate(date) {
@@ -135,11 +172,97 @@ function formatDateRange(dateStart, dateEnd) {
   return `${formatDate(dateStart)} → ${formatDate(dateEnd)}`;
 }
 
+function YieldPredictionCard({ prediction, loading, error }) {
+  const formatKg = (value) => new Intl.NumberFormat("fr-FR", {
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+
+  return (
+    <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+      <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Prévision indicative</span>
+      <h2 className="mt-1 text-2xl font-bold">Estimation de récolte</h2>
+      {loading ? <p className="mt-4 text-muted">Calcul des informations disponibles…</p> : null}
+      {error ? <p role="status" className="mt-4 text-sm text-muted">{error}</p> : null}
+      {!loading && prediction ? (
+        <>
+          {prediction.rendement_estime_kg_ha != null ? (
+            <div className="mt-4 rounded-xl bg-sand p-4 text-ink">
+              <p className="text-sm text-muted">Récolte estimée</p>
+              <p className="mt-1 text-2xl font-extrabold text-primary">
+                {prediction.quantite_totale_estimee_kg != null
+                  ? `≈ ${formatKg(prediction.quantite_totale_estimee_kg)} kg`
+                  : `${formatKg(prediction.rendement_estime_kg_ha)} kg/ha`}
+              </p>
+              {prediction.quantite_totale_estimee_kg != null ? (
+                <p className="mt-1 text-sm">
+                  Soit environ {formatKg(prediction.rendement_estime_kg_ha)} kg par hectare.
+                </p>
+              ) : null}
+              {prediction.recolte_prevue?.date_debut ? (
+                <p className="mt-2 text-sm">
+                  Période estimée : {formatDate(prediction.recolte_prevue.date_debut)}
+                  {prediction.recolte_prevue.date_fin && prediction.recolte_prevue.date_fin !== prediction.recolte_prevue.date_debut
+                    ? ` – ${formatDate(prediction.recolte_prevue.date_fin)}`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl bg-sand p-4 text-sm text-ink">
+              Pas assez de données locales pour estimer cette récolte.
+            </p>
+          )}
+          {prediction.explication_prevision ? (
+            <p className="mt-3 text-sm text-muted">{prediction.explication_prevision}</p>
+          ) : null}
+          {prediction.avancement_cycle ? (
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-semibold">
+                  {prediction.avancement_cycle.indicatif ? "Cycle estimé" : "Avancement du cycle"}
+                </span>
+                <span className="font-bold text-primary">{prediction.avancement_cycle.pourcentage}%</span>
+              </div>
+              <div
+                className="h-3 overflow-hidden rounded-full bg-sand"
+                role="progressbar"
+                aria-label="Avancement du cycle cultural"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={prediction.avancement_cycle.pourcentage}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${prediction.avancement_cycle.pourcentage}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </article>
+  );
+}
+
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [cultures, setCultures] = useState([]);
   const [selectedCulture, setSelectedCulture] = useState(null);
+  const [cultureFilter, setCultureFilter] = useState("");
+  const [regionFilter, setRegionFilter] = useState("");
+  const [systemFilter, setSystemFilter] = useState("");
+  const [marketForm, setMarketForm] = useState({
+    statut_recolte: "in_progress",
+    quantite_disponible_vente: "",
+    unite_disponible_vente: "kg",
+    prix_kg_fcfa: "",
+  });
+  const [marketSaving, setMarketSaving] = useState(false);
+  const [marketError, setMarketError] = useState("");
+  const [marketNotice, setMarketNotice] = useState("");
 
   /*
    * SERVICES ACTUELS
@@ -151,12 +274,22 @@ export default function Dashboard() {
    */
   const [calendar, setCalendar] = useState(null);
   const [weather, setWeather] = useState(null);
+  const [yieldPrediction, setYieldPrediction] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [servicesLoading, setServicesLoading] = useState(false);
 
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState("overview");
+  const [history, setHistory] = useState({
+    orders: [],
+    reservations: [],
+    messages: [],
+  });
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   /*
    * IA
@@ -171,6 +304,11 @@ export default function Dashboard() {
    */
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  async function handleLogout() {
+    await logout();
+    navigate("/");
+  }
 
   /*
    * Deux références différentes :
@@ -218,7 +356,8 @@ export default function Dashboard() {
         const list = Array.isArray(data) ? data : [];
 
         setCultures(list);
-        setSelectedCulture(list[0] || null);
+        const createdId = location.state?.createdCultureId;
+        setSelectedCulture(list.find((item) => String(item.id) === String(createdId)) || list[0] || null);
       } catch (err) {
         setError(
           err.message ||
@@ -230,7 +369,100 @@ export default function Dashboard() {
     }
 
     loadCultures();
-  }, []);
+  }, [location.state]);
+
+  useEffect(() => {
+    if (activeSection !== "history") {
+      return undefined;
+    }
+
+    let active = true;
+    async function loadHistory() {
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      try {
+        const [orderData, reservationData, conversationData] = await Promise.all([
+          transactionService.getOrders(),
+          transactionService.getReservations(),
+          buyerService.getConversations(),
+        ]);
+        const orders = getList(orderData, "des commandes");
+        const reservations = getList(reservationData, "des réservations");
+        const conversations = getList(conversationData, "des conversations");
+        const messagesByConversation = await Promise.all(
+          conversations.map(async (conversation) => ({
+            conversation,
+            messages: getList(
+              await buyerService.getMessages(conversation.id),
+              "des messages"
+            ),
+          }))
+        );
+
+        if (active) {
+          setHistory({
+            orders,
+            reservations,
+            messages: messagesByConversation.flatMap(({ conversation, messages }) =>
+              messages.map((message) => ({ ...message, conversation }))
+            ),
+          });
+        }
+      } catch (historyLoadError) {
+        if (active) {
+          setHistoryError(
+            historyLoadError.message || "Impossible de charger votre historique."
+          );
+        }
+      } finally {
+        if (active) {
+          setHistoryLoading(false);
+        }
+      }
+    }
+
+    loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [activeSection]);
+
+  useEffect(() => {
+    setMarketForm({
+      statut_recolte: selectedCulture?.statut_recolte || "in_progress",
+      quantite_disponible_vente: selectedCulture?.quantite_disponible_vente ?? "",
+      unite_disponible_vente: selectedCulture?.unite_disponible_vente || "kg",
+      prix_kg_fcfa: selectedCulture?.prix_kg_fcfa ?? "",
+    });
+    setMarketError("");
+    setMarketNotice("");
+  }, [selectedCulture?.id]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadYieldPrediction() {
+      if (!selectedCulture?.id) {
+        setYieldPrediction(null);
+        return;
+      }
+      setPredictionLoading(true);
+      setPredictionError("");
+      try {
+        const data = await cultureService.getYieldPrediction(selectedCulture.id);
+        if (active) setYieldPrediction(data);
+      } catch (err) {
+        if (active) {
+          setYieldPrediction(null);
+          setPredictionError(err.message || "La prévision est momentanément indisponible.");
+        }
+      } finally {
+        if (active) setPredictionLoading(false);
+      }
+    }
+    loadYieldPrediction();
+    return () => { active = false; };
+  }, [selectedCulture?.id]);
 
   /*
    * Chargement du calendrier + météo
@@ -240,15 +472,20 @@ export default function Dashboard() {
    * La météo ne dépend PAS du module hydrique.
    */
   useEffect(() => {
+    let active = true;
+
     async function loadCultureServices() {
       if (!selectedCulture?.id) {
         setCalendar(null);
         setWeather(null);
+        setServicesLoading(false);
         return;
       }
 
       setServicesLoading(true);
       setError("");
+      setCalendar(null);
+      setWeather(null);
 
       try {
         const [calendarData, weatherData] =
@@ -261,19 +498,29 @@ export default function Dashboard() {
             ),
           ]);
 
-        setCalendar(calendarData);
-        setWeather(weatherData);
+        if (active) {
+          setCalendar(calendarData);
+          setWeather(weatherData);
+        }
       } catch (err) {
-        setError(
-          err.message ||
-            "Impossible de charger les informations de votre culture."
-        );
+        if (active) {
+          setError(
+            err.message ||
+              "Impossible de charger les informations de votre culture."
+          );
+        }
       } finally {
-        setServicesLoading(false);
+        if (active) {
+          setServicesLoading(false);
+        }
       }
     }
 
     loadCultureServices();
+
+    return () => {
+      active = false;
+    };
   }, [selectedCulture]);
 
   /*
@@ -283,6 +530,20 @@ export default function Dashboard() {
     () => getCultureName(selectedCulture),
     [selectedCulture]
   );
+
+  const filteredCultures = useMemo(() => cultures.filter((culture) => (
+    (!cultureFilter || String(culture.culture) === cultureFilter)
+    && (!regionFilter || String(culture.region) === regionFilter)
+    && (!systemFilter || culture.systeme_culture === systemFilter)
+  )), [cultures, cultureFilter, regionFilter, systemFilter]);
+
+  useEffect(() => {
+    if (!filteredCultures.length && selectedCulture) {
+      setSelectedCulture(null);
+    } else if (filteredCultures.length && !filteredCultures.some((culture) => culture.id === selectedCulture?.id)) {
+      setSelectedCulture(filteredCultures[0]);
+    }
+  }, [filteredCultures, selectedCulture?.id]);
 
   /*
    * Prochaine opération provenant directement
@@ -493,6 +754,11 @@ export default function Dashboard() {
     setError("");
     setProfileSaved(false);
 
+    if (profile.telephone.trim() && !isValidSenegalPhone(profile.telephone)) {
+      setError("Saisissez un numéro sénégalais valide commençant par 76, 77 ou 78 (9 chiffres, indicatif +221 facultatif).");
+      return;
+    }
+
     try {
       const updatedUser =
         await authService.updateProfile({
@@ -523,6 +789,29 @@ export default function Dashboard() {
     }
   }
 
+  async function saveMarketData(event) {
+    event.preventDefault();
+    if (!selectedCulture?.id) return;
+    setMarketSaving(true);
+    setMarketError("");
+    setMarketNotice("");
+    try {
+      const updated = await cultureService.updateCulture(selectedCulture.id, {
+        ...marketForm,
+        quantite_disponible_vente: marketForm.quantite_disponible_vente === "" ? null : marketForm.quantite_disponible_vente,
+        unite_disponible_vente: marketForm.quantite_disponible_vente === "" ? "" : marketForm.unite_disponible_vente,
+        prix_kg_fcfa: marketForm.prix_kg_fcfa === "" ? null : marketForm.prix_kg_fcfa,
+      });
+      setCultures((current) => current.map((crop) => crop.id === updated.id ? updated : crop));
+      setSelectedCulture(updated);
+      setMarketNotice("Les informations de récolte et de vente sont enregistrées.");
+    } catch (saveError) {
+      setMarketError(saveError.message || "Impossible d’enregistrer ces informations.");
+    } finally {
+      setMarketSaving(false);
+    }
+  }
+
   /*
    * Chargement initial
    */
@@ -543,73 +832,168 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="min-h-[80vh] bg-sand">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-
-        {/* =====================================================
-            HEADER
-        ====================================================== */}
-
-        <section className="mb-6 overflow-hidden rounded-[24px] bg-primary p-6 text-white shadow-[0_18px_50px_rgba(3,106,56,0.16)] sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-
-            <div>
-              <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/70">
-                Espace agriculteur
-              </span>
-
-              <h1 className="mt-2 font-display text-3xl font-medium tracking-[-0.04em] sm:text-4xl lg:text-5xl">
-                Bonjour {getFirstName(user)}
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
-                Retrouvez ici vos cultures, votre calendrier agricole,
-                la météo de votre région et votre assistant IA.
-              </p>
-            </div>
-
-            <Link
-              to="/culture/nouvelle"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-primary transition hover:-translate-y-0.5"
-            >
-              <Plus size={18} />
-              Ajouter une culture
-            </Link>
-          </div>
-        </section>
-
-        <ErrorMessage message={error} />
-
-        {/* =====================================================
-            NAVIGATION
-        ====================================================== */}
-
-        <nav className="mb-6 overflow-x-auto rounded-2xl border border-earth bg-white p-2 shadow-sm">
-          <div className="flex min-w-max gap-2">
-
+    <main className="min-h-[80vh] bg-sand lg:flex">
+      <aside className="sticky top-0 z-40 w-full border-b border-earth bg-white shadow-sm lg:h-screen lg:w-64 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <div className="flex min-h-16 items-center gap-3 px-3 py-2 sm:px-6 lg:min-h-full lg:flex-col lg:items-stretch lg:gap-6 lg:px-4 lg:py-6">
+          <p className="hidden font-display text-xl font-bold text-primary lg:block">
+            Agri-Conseil
+          </p>
+          <nav
+            aria-label="Navigation de l’espace agriculteur"
+            className="flex min-w-0 flex-1 gap-2 overflow-x-auto lg:flex-col lg:overflow-visible"
+          >
             {[
-              ["overview", "Vue d'ensemble"],
-              ["cultures", "Mes cultures"],
-              ["calendar", "Calendrier"],
-              ["weather", "Météo"],
-              ["ai", "Assistant IA"],
-              ["profile", "Mon profil"],
-            ].map(([id, label]) => (
+              ["overview", "Vue d'ensemble", LayoutDashboard],
+              ["cultures", "Mes cultures", Leaf],
+              ["calendar", "Calendrier", CalendarDays],
+              ["weather", "Météo", CloudSun],
+              ["ai", "Assistant IA", Sparkles],
+              ["history", "Historiques", HistoryIcon],
+            ].map(([id, label, Icon]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveSection(id)}
-                className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                aria-current={activeSection === id ? "page" : undefined}
+                className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition lg:w-full ${
                   activeSection === id
                     ? "bg-primary text-white"
                     : "text-muted hover:bg-soft hover:text-primary"
                 }`}
               >
+                <Icon size={18} aria-hidden="true" />
                 {label}
               </button>
             ))}
+            <MessagesNavLink
+              label="Mes acheteurs"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-soft hover:text-primary lg:w-full"
+              onClick={() => setActiveSection("buyers")}
+              active={activeSection === "buyers"}
+            />
+            <button
+              type="button"
+              onClick={() => setActiveSection("orders")}
+              aria-current={activeSection === "orders" ? "page" : undefined}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition lg:w-full ${
+                activeSection === "orders"
+                  ? "bg-primary text-white"
+                  : "text-muted hover:bg-soft hover:text-primary"
+              }`}
+            >
+              <ClipboardList size={16} />
+              Mes commandes
+            </button>
+          </nav>
+          <div className="flex shrink-0 items-center gap-2 lg:mt-auto lg:flex-col lg:items-stretch lg:border-t lg:border-earth lg:pt-4">
+            <button
+              type="button"
+              onClick={() => setActiveSection("profile")}
+              aria-current={activeSection === "profile" ? "page" : undefined}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition lg:w-full ${
+                activeSection === "profile"
+                  ? "bg-primary text-white"
+                  : "text-muted hover:bg-soft hover:text-primary"
+              }`}
+            >
+              <UserRound size={16} />
+              Mon profil
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-earth px-4 py-2.5 text-sm font-semibold text-muted transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 lg:w-full"
+            >
+              <LogOut size={16} />
+              Se déconnecter
+            </button>
           </div>
-        </nav>
+        </div>
+      </aside>
+
+      <div className="mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+
+        {!["cultures", "calendar", "weather", "ai", "buyers", "orders"].includes(activeSection) && (
+          <section className="mb-6 overflow-hidden rounded-[24px] bg-primary p-6 text-white shadow-[0_18px_50px_rgba(3,106,56,0.16)] sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/70">
+                  Espace agriculteur
+                </span>
+                <h1 className="mt-2 font-display text-3xl font-medium tracking-[-0.04em] sm:text-4xl lg:text-5xl">
+                  Bonjour {getFirstName(user)}
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
+                  Retrouvez ici vos cultures, votre calendrier agricole,
+                  la météo de votre région et votre assistant IA.
+                </p>
+              </div>
+              <Link
+                to="/culture/nouvelle"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-primary transition hover:-translate-y-0.5"
+              >
+                <Plus size={18} />
+                Ajouter une culture
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {activeSection === "cultures" && (
+          <div className="mb-3 flex justify-end">
+            <Link
+              to="/culture/nouvelle"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:-translate-y-0.5"
+            >
+              <Plus size={18} />
+              Ajouter une culture
+            </Link>
+          </div>
+        )}
+
+        {cultures.length > 0 && !["ai", "profile"].includes(activeSection) && (
+          <section className="mb-6 rounded-2xl border border-earth bg-white p-4 shadow-sm sm:p-5" aria-label="Filtres des cultures enregistrées">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-semibold text-ink">Filtrer mes cultures</h2>
+              <span className="text-sm text-muted">{filteredCultures.length} culture{filteredCultures.length > 1 ? "s" : ""} affichée{filteredCultures.length > 1 ? "s" : ""}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium text-ink">
+                Culture
+                <select value={cultureFilter} onChange={(event) => setCultureFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Toutes les cultures</option>
+                  {[...new Map(cultures.map((culture) => [String(culture.culture), getCultureName(culture)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Région
+                <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Toutes les régions</option>
+                  {[...new Map(cultures.map((culture) => [String(culture.region), culture.region_nom || culture.region?.nom || "Région"]))].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Système de culture
+                <select value={systemFilter} onChange={(event) => setSystemFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
+                  <option value="">Tous les systèmes</option>
+                  <option value="pluvial">Pluvial</option>
+                  <option value="irrigue">Irrigué</option>
+                  <option value="mixte">Mixte</option>
+                </select>
+              </label>
+            </div>
+          </section>
+        )}
+
+        {cultures.length > 0 &&
+          filteredCultures.length === 0 &&
+          !["ai", "profile"].includes(activeSection) && (
+          <section className="mb-6 rounded-2xl border border-earth bg-white p-6 text-center text-muted">
+            Aucune culture enregistrée ne correspond à ces filtres.
+          </section>
+        )}
+
+        <ErrorMessage message={error} />
 
         {profileSaved && (
           <div className="mb-5 rounded-xl border border-primary/20 bg-soft px-4 py-3 text-sm font-semibold text-primary">
@@ -621,7 +1005,7 @@ export default function Dashboard() {
             AUCUNE CULTURE
         ====================================================== */}
 
-        {cultures.length === 0 ? (
+        {cultures.length === 0 && ["overview", "cultures"].includes(activeSection) ? (
           <section className="rounded-[24px] border border-earth bg-white p-8 text-center shadow-sm sm:p-12">
 
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-soft text-primary">
@@ -654,20 +1038,18 @@ export default function Dashboard() {
 
             {activeSection === "cultures" && (
               <section className="space-y-5">
-
                 <div>
                   <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-primary">
                     Mes cultures
                   </span>
-
                   <h2 className="mt-1 font-display text-3xl">
                     Mes suivis agricoles
                   </h2>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
-                  {cultures.map((culture) => {
+                  {filteredCultures.map((culture) => {
                     const active =
                       selectedCulture?.id === culture.id;
 
@@ -745,11 +1127,10 @@ export default function Dashboard() {
             ================================================== */}
 
             {activeSection === "overview" && (
-              <section className="space-y-5">
+              <section className="grid items-start gap-5 lg:grid-cols-2">
 
                 {/* Résumé culture + prochaine opération */}
 
-                <div className="grid gap-5 lg:grid-cols-2">
 
                   {/* MA CULTURE */}
 
@@ -802,7 +1183,7 @@ export default function Dashboard() {
                     <div className="mt-3 rounded-xl bg-sand p-4">
 
                       <p className="text-sm text-muted">
-                        Fin prévue
+                        {calendar?.fin_prevue_indicative ? "Fin estimée (indicative)" : "Fin prévue"}
                       </p>
 
                       <strong className="mt-1 block">
@@ -813,6 +1194,38 @@ export default function Dashboard() {
 
                     </div>
                   </article>
+
+                <YieldPredictionCard
+                  prediction={yieldPrediction}
+                  loading={predictionLoading}
+                  error={predictionError}
+                />
+
+                <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary"><ShoppingBag size={23} /></div>
+                    <div><span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Vente et récolte</span><h2 className="mt-1 text-2xl font-bold">Publier cette récolte</h2></div>
+                  </div>
+                  <form onSubmit={saveMarketData} className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-ink sm:col-span-2">Statut de la récolte
+                      <select value={marketForm.statut_recolte} onChange={(event) => setMarketForm((current) => ({ ...current, statut_recolte: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5">
+                        <option value="in_progress">En cours de récolte</option><option value="available">Disponible à la vente</option><option value="harvested">Récoltée</option><option value="exhausted">Épuisée</option><option value="unavailable">Indisponible</option><option value="cancelled">Annulée</option>
+                      </select>
+                    </label>
+                    <label className="text-sm font-medium text-ink">Quantité réellement disponible
+                      <input type="number" min="0" step="0.001" value={marketForm.quantite_disponible_vente} onChange={(event) => setMarketForm((current) => ({ ...current, quantite_disponible_vente: event.target.value }))} placeholder="Stock récolté disponible" className="mt-1.5 w-full rounded-xl border border-earth px-3 py-2.5" />
+                    </label>
+                    <label className="text-sm font-medium text-ink">Unité
+                      <select value={marketForm.unite_disponible_vente} onChange={(event) => setMarketForm((current) => ({ ...current, unite_disponible_vente: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5"><option value="kg">Kilogrammes</option><option value="tonne">Tonnes</option></select>
+                    </label>
+                    <label className="text-sm font-medium text-ink sm:col-span-2">Prix facultatif (FCFA/kg)
+                      <input type="number" min="0.01" step="0.01" value={marketForm.prix_kg_fcfa} onChange={(event) => setMarketForm((current) => ({ ...current, prix_kg_fcfa: event.target.value }))} placeholder="Laisser vide si le prix est à discuter" className="mt-1.5 w-full rounded-xl border border-earth px-3 py-2.5" />
+                    </label>
+                    {marketError ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{marketError}</p> : null}
+                    {marketNotice ? <p role="status" className="text-sm font-semibold text-primary sm:col-span-2">{marketNotice}</p> : null}
+                    <button type="submit" disabled={marketSaving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50 sm:col-span-2"><Save size={17} /> {marketSaving ? "Enregistrement…" : "Enregistrer le statut et le stock"}</button>
+                  </form>
+                </article>
 
                   {/* PROCHAINE OPÉRATION */}
 
@@ -876,14 +1289,12 @@ export default function Dashboard() {
                     )}
 
                   </article>
-                </div>
 
                 {/* =================================================
                     MÉTÉO + CONSEIL DANS OVERVIEW
                     CÔTE À CÔTE SUR GRAND ÉCRAN
                 ================================================== */}
 
-                <div className="grid gap-5 lg:grid-cols-2">
 
                   {/* MÉTÉO */}
 
@@ -1009,8 +1420,6 @@ export default function Dashboard() {
 
                   </article>
 
-                </div>
-
               </section>
             )}
 
@@ -1047,7 +1456,7 @@ export default function Dashboard() {
                       </p>
 
                       <p>
-                        Fin prévue :{" "}
+                        {calendar?.fin_prevue_indicative ? "Fin estimée (indicative) : " : "Fin prévue : "}{" "}
                         <strong className="text-ink">
                           {formatDate(
                             calendar?.fin_prevue
@@ -1186,7 +1595,7 @@ export default function Dashboard() {
             ================================================== */}
 
             {activeSection === "weather" && (
-              <section className="grid gap-5 lg:grid-cols-2">
+              <section className="grid items-start gap-5 lg:grid-cols-2">
 
                 {/* MÉTÉO DE MA RÉGION */}
 
@@ -1341,7 +1750,7 @@ export default function Dashboard() {
             ================================================== */}
 
             {activeSection === "ai" && (
-              <section className="grid gap-5 lg:grid-cols-2">
+              <section className="grid items-start gap-5 lg:grid-cols-2">
 
                 {/* =================================================
                     CARTE PHOTO
@@ -1607,14 +2016,16 @@ export default function Dashboard() {
                           <p className="text-sm font-semibold text-muted">
                             Conseil pratique
                           </p>
+
                           <p className="mt-2 whitespace-pre-line leading-7">
                             {analysis.conseil}
                           </p>
                         </div>
                       )}
+
                     </div>
                   ) : (
-                    <div className="flex min-h-[360px] items-center justify-center text-center">
+                    <div className="flex items-center justify-center text-center">
                       <div>
                         <Sprout
                           size={45}
@@ -1728,7 +2139,10 @@ export default function Dashboard() {
                   />
 
                   <input
+                    type="tel"
                     value={profile.telephone}
+                    pattern="(?:\+221[ .-]?)?(?:76|77|78)(?:[ .-]?[0-9]){7}"
+                    title="Numéro sénégalais commençant par 76, 77 ou 78, avec 9 chiffres. L’indicatif +221 est facultatif."
                     onChange={(e) =>
                       setProfile({
                         ...profile,
@@ -1770,6 +2184,180 @@ export default function Dashboard() {
               </section>
             )}
           </>
+        )}
+
+        {activeSection === "buyers" && <MessagesPage embedded />}
+
+        {activeSection === "orders" && <TransactionsPage embedded />}
+
+        {activeSection === "history" && (
+          <section className="space-y-6">
+            <header>
+              <span className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.12em] text-primary">
+                <HistoryIcon size={16} />
+                Archives de votre activité
+              </span>
+              <h2 className="mt-1 font-display text-3xl">Historiques</h2>
+              <p className="mt-2 text-sm text-muted">
+                Les récoltes apparaissent ici après leur date prévue. Retrouvez aussi vos commandes,
+                réservations et échanges avec les acheteurs.
+              </p>
+            </header>
+
+            {historyError ? (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {historyError}
+              </p>
+            ) : null}
+
+            {historyLoading ? (
+              <p className="rounded-2xl border border-earth bg-white p-8 text-center text-muted">
+                Chargement de votre historique…
+              </p>
+            ) : (
+              <>
+                <section className="space-y-3" aria-labelledby="history-harvests">
+                  <h3 id="history-harvests" className="flex items-center gap-2 text-xl font-bold">
+                    <CalendarDays size={20} className="text-primary" />
+                    Récoltes passées
+                  </h3>
+                  {cultures.filter((culture) => getPastHarvestDate(culture)).length === 0 ? (
+                    <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
+                      Aucune récolte dont la date est passée pour le moment.
+                    </p>
+                  ) : (
+                    <div className="grid items-start gap-3 md:grid-cols-2">
+                      {cultures
+                        .map((culture) => ({
+                          culture,
+                          harvestDate: getPastHarvestDate(culture),
+                        }))
+                        .filter(({ harvestDate }) => harvestDate)
+                        .sort((a, b) => b.harvestDate.localeCompare(a.harvestDate))
+                        .map(({ culture, harvestDate }) => (
+                          <article key={culture.id} className="rounded-2xl border border-earth bg-white p-5">
+                            <h4 className="text-lg font-bold">{getCultureName(culture)}</h4>
+                            <p className="mt-1 text-sm text-muted">{getLocalisation(culture)}</p>
+                            <p className="mt-3 text-sm">
+                              Date de récolte passée : <strong>{formatDate(harvestDate)}</strong>
+                            </p>
+                            {culture.statut_recolte ? (
+                              <p className="mt-1 text-sm text-muted">
+                                Statut : {culture.statut_recolte}
+                              </p>
+                            ) : null}
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-3" aria-labelledby="history-orders">
+                  <h3 id="history-orders" className="flex items-center gap-2 text-xl font-bold">
+                    <ClipboardList size={20} className="text-primary" />
+                    Commandes
+                  </h3>
+                  {history.orders.length === 0 ? (
+                    <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
+                      Aucune commande dans votre historique.
+                    </p>
+                  ) : (
+                    <div className="grid items-start gap-3 md:grid-cols-2">
+                      {[...history.orders]
+                        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+                        .map((order) => (
+                          <article key={order.id} className="rounded-2xl border border-earth bg-white p-5">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <h4 className="text-lg font-bold">{order.culture_nom || "Culture"}</h4>
+                              <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">
+                                {order.statut || "Statut inconnu"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-muted">Commande n° {order.id}</p>
+                            <p className="mt-1 text-sm">Acheteur : <strong>{order.buyer_name || "Non renseigné"}</strong></p>
+                            <p className="mt-1 text-sm">Quantité : <strong>{order.quantite_kg ?? "—"} kg</strong></p>
+                            <p className="mt-1 text-sm">Demandée le : {formatHistoryTimestamp(order.created_at)}</p>
+                            {order.message ? <p className="mt-2 rounded-xl bg-sand p-3 text-sm">{order.message}</p> : null}
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-3" aria-labelledby="history-reservations">
+                  <h3 id="history-reservations" className="flex items-center gap-2 text-xl font-bold">
+                    <CalendarClock size={20} className="text-primary" />
+                    Réservations
+                  </h3>
+                  {history.reservations.length === 0 ? (
+                    <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
+                      Aucune réservation dans votre historique.
+                    </p>
+                  ) : (
+                    <div className="grid items-start gap-3 md:grid-cols-2">
+                      {[...history.reservations]
+                        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+                        .map((reservation) => (
+                          <article key={reservation.id} className="rounded-2xl border border-earth bg-white p-5">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <h4 className="text-lg font-bold">{reservation.culture_nom || "Culture"}</h4>
+                              <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">
+                                {reservation.statut || "Statut inconnu"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-muted">Réservation n° {reservation.id}</p>
+                            <p className="mt-1 text-sm">Acheteur : <strong>{reservation.buyer_name || "Non renseigné"}</strong></p>
+                            <p className="mt-1 text-sm">Quantité : <strong>{reservation.quantite_kg ?? "—"} kg</strong></p>
+                            <p className="mt-1 text-sm">Demandée le : {formatHistoryTimestamp(reservation.created_at)}</p>
+                            {reservation.message ? <p className="mt-2 rounded-xl bg-sand p-3 text-sm">{reservation.message}</p> : null}
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-3" aria-labelledby="history-messages">
+                  <h3 id="history-messages" className="flex items-center gap-2 text-xl font-bold">
+                    <MessageCircle size={20} className="text-primary" />
+                    Messages
+                  </h3>
+                  {history.messages.length === 0 ? (
+                    <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
+                      Aucun message dans votre historique.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {[...history.messages]
+                        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+                        .map((message) => (
+                          <article
+                            key={`${message.conversation.id}-${message.id}`}
+                            className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-earth bg-white p-5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold">
+                                {message.sender_name || "Participant"} · {message.conversation.culture_nom || "Conversation"}
+                              </p>
+                              <p className="mt-1 text-xs text-muted">{formatHistoryTimestamp(message.created_at)}</p>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm">
+                                {message.message_type === "audio" ? "Message vocal" : message.content}
+                              </p>
+                            </div>
+                            <Link
+                              to={`/messages/${message.conversation.id}`}
+                              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-earth px-4 py-2 text-sm font-semibold text-primary hover:bg-soft"
+                            >
+                              <MessageCircle size={16} />
+                              Voir la conversation
+                            </Link>
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+          </section>
         )}
       </div>
     </main>
