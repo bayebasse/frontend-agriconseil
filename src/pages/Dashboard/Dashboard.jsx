@@ -62,6 +62,31 @@ function getFirstName(user) {
   );
 }
 
+function parseKnowledgeSections(content) {
+  if (!content || typeof content !== "string") {
+    return [];
+  }
+
+  return content
+    .split(/^###\s+/m)
+    .slice(1)
+    .map((section) => {
+      const lines = section.split("\n");
+      const title = (lines.shift() || "").trim().replace(/[*_`]/g, "");
+      const text = lines
+        .join("\n")
+        .replace(/^\s*[-*]\s+/gm, "")
+        .replace(/^\s*\d+[.)]\s+/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .trim();
+
+      return { title, text };
+    })
+    .filter((section) => section.title && section.text);
+}
+
 function formatDate(date) {
   if (!date) {
     return "—";
@@ -1506,41 +1531,75 @@ export default function Dashboard() {
 
                   {analysis ? (
                     <div className="mt-4 space-y-5">
+                      {analysis.diagnostic?.message && (
+                        <div
+                          className={`rounded-2xl border p-4 ${
+                            ["image_inexploitable", "culture_non_supportee"].includes(
+                              analysis.diagnostic?.statut
+                            )
+                              ? "border-amber-300 bg-amber-50 text-amber-950"
+                              : "border-primary/20 bg-white text-slate-800"
+                          }`}
+                          role="status"
+                        >
+                          <p className="font-semibold">
+                            {analysis.diagnostic.statut === "image_inexploitable"
+                              ? "Photo à reprendre"
+                              : analysis.diagnostic.statut === "culture_non_supportee"
+                                ? "Culture non prise en charge"
+                                : "Résultat de l'analyse"}
+                          </p>
+                          <p className="mt-2 leading-7">
+                            {analysis.diagnostic.message}
+                          </p>
+                        </div>
+                      )}
 
                       <div>
                         <p className="text-sm font-semibold text-muted">
                           Culture détectée
                         </p>
                         <h3 className="mt-1 text-2xl font-bold">
-                          {analysis.prediction?.culture || "—"}
+                          {analysis.prediction?.culture ||
+                            (analysis.diagnostic?.statut === "culture_non_supportee"
+                              ? "Culture non prise en charge"
+                              : analysis.diagnostic?.statut === "image_inexploitable"
+                                ? "Culture non déterminée"
+                                : "Résultat non disponible")}
                         </h3>
                       </div>
 
-                      <div>
-                        <p className="text-sm font-semibold text-muted">
-                          Résultat de l'analyse
-                        </p>
-                        <p className="mt-1 text-lg font-semibold">
-                          {analysis.prediction?.maladie || "Résultat indisponible"}
-                        </p>
-                      </div>
-
-                      {analysis.connaissance?.contenu && (
-                        <div className="rounded-2xl bg-white p-5">
+                      {analysis.prediction?.maladie && (
+                        <div>
                           <p className="text-sm font-semibold text-muted">
-                            Conseils et recommandations
+                            Résultat de l'analyse
                           </p>
-
-                          {analysis.connaissance.titre && (
-                            <p className="mt-2 font-bold text-primary">
-                              {analysis.connaissance.titre}
-                            </p>
-                          )}
-
-                          <p className="mt-3 whitespace-pre-line leading-7">
-                            {analysis.connaissance.contenu}
+                          <p className="mt-1 text-lg font-semibold">
+                            {analysis.prediction.maladie}
                           </p>
                         </div>
+                      )}
+
+                      {analysis.connaissance?.titre && (
+                        <p className="font-bold text-primary">
+                          {analysis.connaissance.titre}
+                        </p>
+                      )}
+
+                      {parseKnowledgeSections(analysis.connaissance?.contenu).map(
+                        (section, index) => (
+                          <div
+                            key={`${section.title}-${index}`}
+                            className="rounded-2xl bg-white p-5"
+                          >
+                            <p className="font-semibold text-primary">
+                              {section.title}
+                            </p>
+                            <p className="mt-2 whitespace-pre-line leading-7 text-slate-700">
+                              {section.text}
+                            </p>
+                          </div>
+                        )
                       )}
 
                       {analysis.conseil && (
@@ -1548,13 +1607,11 @@ export default function Dashboard() {
                           <p className="text-sm font-semibold text-muted">
                             Conseil pratique
                           </p>
-
                           <p className="mt-2 whitespace-pre-line leading-7">
                             {analysis.conseil}
                           </p>
                         </div>
                       )}
-
                     </div>
                   ) : (
                     <div className="flex min-h-[360px] items-center justify-center text-center">

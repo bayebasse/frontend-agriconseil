@@ -92,6 +92,7 @@
 
 import { Navigate, Route, Routes } from "react-router-dom";
 
+
 import Home from "../pages/Home/Home";
 import Login from "../pages/Auth/Login";
 import Register from "../pages/Auth/Register";
@@ -99,6 +100,7 @@ import CreateCulture from "../pages/Culture/CreateCulture";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import AdminDashboard from "../admin/AdminDashboard";
 import { useAuth } from "../contexts/AuthContext";
+import PolitiqueConfidentialite from "../pages/PolitiqueConfidentialite/PolitiqueConfidentialite";
 
 function DashboardEntry() {
   const { user } = useAuth();
@@ -161,6 +163,10 @@ export default function AppRoutes() {
           </ProtectedFarmerRoute>
         }
       />
+      <Route
+  path="/politique-confidentialite"
+  element={<PolitiqueConfidentialite />}
+/>
     </Routes>
   );
 }

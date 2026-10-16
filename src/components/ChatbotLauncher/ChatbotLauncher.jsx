@@ -19,7 +19,7 @@ export default function ChatbotLauncher({
       <span className="absolute inset-0 bg-[#00452F]/35" />
 
       <span className="relative z-10 rounded-full bg-[#00452F]/75 px-3 py-1 text-xs font-bold text-white">
-        question ?
+        question?
       </span>
     </button>
   );
