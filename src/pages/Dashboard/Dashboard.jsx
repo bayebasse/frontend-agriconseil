@@ -41,6 +41,7 @@ import { buyerService } from "../../services/buyerService";
 import { transactionService } from "../../services/transactionService";
 import { getPastHarvestDate } from "../../utils/harvestHistory";
 import { isValidSenegalPhone } from "../../utils/accountValidation";
+import { hasFarmerMessagingAccess } from "../../utils/farmerMessagingAccess";
 
 function getCultureName(culture) {
   return (
@@ -176,6 +177,14 @@ function YieldPredictionCard({ prediction, loading, error }) {
   const formatKg = (value) => new Intl.NumberFormat("fr-FR", {
     maximumFractionDigits: 0,
   }).format(Number(value));
+  const formatHarvestQuantity = (value) => {
+    const quantityKg = Number(value);
+    if (!Number.isFinite(quantityKg)) return "Quantité indisponible";
+    if (quantityKg >= 1000) {
+      return `≈ ${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(quantityKg / 1000)} t`;
+    }
+    return `≈ ${formatKg(quantityKg)} kg`;
+  };
 
   return (
     <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
@@ -187,17 +196,23 @@ function YieldPredictionCard({ prediction, loading, error }) {
         <>
           {prediction.rendement_estime_kg_ha != null ? (
             <div className="mt-4 rounded-xl bg-sand p-4 text-ink">
-              <p className="text-sm text-muted">Récolte estimée</p>
+              <p className="text-sm text-muted">
+                {prediction.quantite_totale_estimee_kg != null ? "Récolte estimée" : "Rendement estimé"}
+              </p>
               <p className="mt-1 text-2xl font-extrabold text-primary">
                 {prediction.quantite_totale_estimee_kg != null
-                  ? `≈ ${formatKg(prediction.quantite_totale_estimee_kg)} kg`
+                  ? formatHarvestQuantity(prediction.quantite_totale_estimee_kg)
                   : `${formatKg(prediction.rendement_estime_kg_ha)} kg/ha`}
               </p>
               {prediction.quantite_totale_estimee_kg != null ? (
                 <p className="mt-1 text-sm">
                   Soit environ {formatKg(prediction.rendement_estime_kg_ha)} kg par hectare.
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-sm">
+                  Rendement indicatif par hectare; précisez l’unité de superficie pour obtenir le total.
+                </p>
+              )}
               {prediction.recolte_prevue?.date_debut ? (
                 <p className="mt-2 text-sm">
                   Période estimée : {formatDate(prediction.recolte_prevue.date_debut)}
@@ -209,11 +224,37 @@ function YieldPredictionCard({ prediction, loading, error }) {
             </div>
           ) : (
             <p className="mt-4 rounded-xl bg-sand p-4 text-sm text-ink">
-              Pas assez de données locales pour estimer cette récolte.
+              {prediction.estimation_ia?.raison === "cle_api_absente"
+                  ? "L’estimation est indisponible : la clé Gemini n’est pas configurée dans le backend."
+                  : prediction.estimation_ia?.raison === "fournisseur_indisponible"
+                    ? "Le service d’estimation est momentanément indisponible. Réessayez plus tard."
+                    : prediction.estimation_ia?.raison === "reponse_modele_invalide"
+                      ? "Le modèle n’a pas fourni d’estimation exploitable. Réessayez plus tard."
+                      : prediction.estimation_ia?.raison === "sources_introuvables"
+                        ? "Aucune source agronomique fiable n’a été trouvée pour cette estimation."
+                      : "Pas assez de données pour estimer cette récolte."}
             </p>
           )}
           {prediction.explication_prevision ? (
             <p className="mt-3 text-sm text-muted">{prediction.explication_prevision}</p>
+          ) : null}
+          {prediction.estimation_ia?.sources?.length ? (
+            <div className="mt-3 text-xs text-muted">
+              <span className="font-semibold">Sources consultées :</span>{" "}
+              {prediction.estimation_ia.sources.map((source, index) => (
+                <span key={source.url}>
+                  {index ? " · " : ""}
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+                  >
+                    {source.titre || "Source agronomique"}
+                  </a>
+                </span>
+              ))}
+            </div>
           ) : null}
           {prediction.avancement_cycle ? (
             <div className="mt-5">
@@ -245,9 +286,12 @@ function YieldPredictionCard({ prediction, loading, error }) {
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [hasMessagingAccess, setHasMessagingAccess] = useState(
+    () => hasFarmerMessagingAccess(user)
+  );
 
   const [cultures, setCultures] = useState([]);
   const [selectedCulture, setSelectedCulture] = useState(null);
@@ -282,7 +326,7 @@ export default function Dashboard() {
   const [servicesLoading, setServicesLoading] = useState(false);
 
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState("overview");
+  const [activeSection, setActiveSection] = useState(location.state?.dashboardSection || "overview");
   const [history, setHistory] = useState({
     orders: [],
     reservations: [],
@@ -304,10 +348,28 @@ export default function Dashboard() {
    */
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [accountDeleting, setAccountDeleting] = useState(false);
 
-  async function handleLogout() {
+  async function handleProfileLogout() {
     await logout();
-    navigate("/");
+    navigate("/", { replace: true });
+  }
+
+  async function handleAccountDeletion() {
+    const confirmed = window.confirm(
+      "La suppression de votre compte est définitive. Vos cultures, commandes, réservations et messages associés seront également supprimés. Voulez-vous continuer ?"
+    );
+    if (!confirmed) return;
+
+    setAccountDeleting(true);
+    setError("");
+    try {
+      await deleteAccount();
+      navigate("/", { replace: true });
+    } catch (deleteError) {
+      setError(deleteError.message || "Impossible de supprimer votre compte.");
+      setAccountDeleting(false);
+    }
   }
 
   /*
@@ -382,32 +444,33 @@ export default function Dashboard() {
       setHistoryError("");
 
       try {
-        const [orderData, reservationData, conversationData] = await Promise.all([
+        const [orderData, reservationData] = await Promise.all([
           transactionService.getOrders(),
           transactionService.getReservations(),
-          buyerService.getConversations(),
         ]);
         const orders = getList(orderData, "des commandes");
         const reservations = getList(reservationData, "des réservations");
-        const conversations = getList(conversationData, "des conversations");
-        const messagesByConversation = await Promise.all(
-          conversations.map(async (conversation) => ({
-            conversation,
-            messages: getList(
-              await buyerService.getMessages(conversation.id),
-              "des messages"
-            ),
-          }))
-        );
+        let messages = [];
+
+        if (hasMessagingAccess) {
+          const conversationData = await buyerService.getConversations();
+          const conversations = getList(conversationData, "des conversations");
+          const messagesByConversation = await Promise.all(
+            conversations.map(async (conversation) => ({
+              conversation,
+              messages: getList(
+                await buyerService.getMessages(conversation.id),
+                "des messages"
+              ),
+            }))
+          );
+          messages = messagesByConversation.flatMap(({ conversation, messages: conversationMessages }) =>
+            conversationMessages.map((message) => ({ ...message, conversation }))
+          );
+        }
 
         if (active) {
-          setHistory({
-            orders,
-            reservations,
-            messages: messagesByConversation.flatMap(({ conversation, messages }) =>
-              messages.map((message) => ({ ...message, conversation }))
-            ),
-          });
+          setHistory({ orders, reservations, messages });
         }
       } catch (historyLoadError) {
         if (active) {
@@ -426,7 +489,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, [activeSection]);
+  }, [activeSection, hasMessagingAccess]);
 
   useEffect(() => {
     setMarketForm({
@@ -438,6 +501,12 @@ export default function Dashboard() {
     setMarketError("");
     setMarketNotice("");
   }, [selectedCulture?.id]);
+
+  useEffect(() => {
+    if (location.state?.dashboardSection) {
+      setActiveSection(location.state.dashboardSection);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     let active = true;
@@ -832,12 +901,9 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="min-h-[80vh] bg-sand lg:flex">
-      <aside className="sticky top-0 z-40 w-full border-b border-earth bg-white shadow-sm lg:h-screen lg:w-64 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-        <div className="flex min-h-16 items-center gap-3 px-3 py-2 sm:px-6 lg:min-h-full lg:flex-col lg:items-stretch lg:gap-6 lg:px-4 lg:py-6">
-          <p className="hidden font-display text-xl font-bold text-primary lg:block">
-            Agri-Conseil
-          </p>
+    <main className="farmer-dashboard min-h-[80vh] bg-sand pb-20 lg:flex lg:pb-0">
+      <aside className="hidden w-full border-b border-earth bg-white shadow-sm lg:sticky lg:top-16 lg:z-40 lg:block lg:min-h-[calc(100vh-4rem)] lg:w-64 lg:shrink-0 lg:self-start lg:border-b-0 lg:border-r">
+        <div className="flex min-h-16 items-center gap-3 px-3 py-2 sm:px-6 lg:flex-col lg:items-stretch lg:gap-2 lg:px-4 lg:py-4">
           <nav
             aria-label="Navigation de l’espace agriculteur"
             className="flex min-w-0 flex-1 gap-2 overflow-x-auto lg:flex-col lg:overflow-visible"
@@ -870,6 +936,7 @@ export default function Dashboard() {
               className="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-soft hover:text-primary lg:w-full"
               onClick={() => setActiveSection("buyers")}
               active={activeSection === "buyers"}
+              showUnreadCount={hasMessagingAccess}
             />
             <button
               type="button"
@@ -885,33 +952,10 @@ export default function Dashboard() {
               Mes commandes
             </button>
           </nav>
-          <div className="flex shrink-0 items-center gap-2 lg:mt-auto lg:flex-col lg:items-stretch lg:border-t lg:border-earth lg:pt-4">
-            <button
-              type="button"
-              onClick={() => setActiveSection("profile")}
-              aria-current={activeSection === "profile" ? "page" : undefined}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition lg:w-full ${
-                activeSection === "profile"
-                  ? "bg-primary text-white"
-                  : "text-muted hover:bg-soft hover:text-primary"
-              }`}
-            >
-              <UserRound size={16} />
-              Mon profil
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-earth px-4 py-2.5 text-sm font-semibold text-muted transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 lg:w-full"
-            >
-              <LogOut size={16} />
-              Se déconnecter
-            </button>
-          </div>
         </div>
       </aside>
 
-      <div className="mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <div className="mx-auto w-full max-w-7xl min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-10">
 
         {!["cultures", "calendar", "weather", "ai", "buyers", "orders"].includes(activeSection) && (
           <section className="mb-6 overflow-hidden rounded-[24px] bg-primary p-6 text-white shadow-[0_18px_50px_rgba(3,106,56,0.16)] sm:p-8">
@@ -957,7 +1001,7 @@ export default function Dashboard() {
               <h2 className="font-semibold text-ink">Filtrer mes cultures</h2>
               <span className="text-sm text-muted">{filteredCultures.length} culture{filteredCultures.length > 1 ? "s" : ""} affichée{filteredCultures.length > 1 ? "s" : ""}</span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3">
               <label className="text-sm font-medium text-ink">
                 Culture
                 <select value={cultureFilter} onChange={(event) => setCultureFilter(event.target.value)} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5 font-normal">
@@ -1047,7 +1091,7 @@ export default function Dashboard() {
                   </h2>
                 </div>
 
-                <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
 
                   {filteredCultures.map((culture) => {
                     const active =
@@ -1090,7 +1134,7 @@ export default function Dashboard() {
                           {getLocalisation(culture)}
                         </p>
 
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
 
                           <div className="rounded-xl bg-white p-3">
                             <span className="block text-muted">
@@ -1153,7 +1197,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-7 grid gap-3 md:grid-cols-2">
 
                       <div className="rounded-xl bg-sand p-4">
                         <p className="text-sm text-muted">
@@ -1206,8 +1250,8 @@ export default function Dashboard() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary"><ShoppingBag size={23} /></div>
                     <div><span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Vente et récolte</span><h2 className="mt-1 text-2xl font-bold">Publier cette récolte</h2></div>
                   </div>
-                  <form onSubmit={saveMarketData} className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-medium text-ink sm:col-span-2">Statut de la récolte
+                  <form onSubmit={saveMarketData} className="mt-5 grid gap-4 md:grid-cols-2">
+                    <label className="text-sm font-medium text-ink md:col-span-2">Statut de la récolte
                       <select value={marketForm.statut_recolte} onChange={(event) => setMarketForm((current) => ({ ...current, statut_recolte: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5">
                         <option value="in_progress">En cours de récolte</option><option value="available">Disponible à la vente</option><option value="harvested">Récoltée</option><option value="exhausted">Épuisée</option><option value="unavailable">Indisponible</option><option value="cancelled">Annulée</option>
                       </select>
@@ -1218,12 +1262,12 @@ export default function Dashboard() {
                     <label className="text-sm font-medium text-ink">Unité
                       <select value={marketForm.unite_disponible_vente} onChange={(event) => setMarketForm((current) => ({ ...current, unite_disponible_vente: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3 py-2.5"><option value="kg">Kilogrammes</option><option value="tonne">Tonnes</option></select>
                     </label>
-                    <label className="text-sm font-medium text-ink sm:col-span-2">Prix facultatif (FCFA/kg)
+                    <label className="text-sm font-medium text-ink md:col-span-2">Prix facultatif (FCFA/kg)
                       <input type="number" min="0.01" step="0.01" value={marketForm.prix_kg_fcfa} onChange={(event) => setMarketForm((current) => ({ ...current, prix_kg_fcfa: event.target.value }))} placeholder="Laisser vide si le prix est à discuter" className="mt-1.5 w-full rounded-xl border border-earth px-3 py-2.5" />
                     </label>
-                    {marketError ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{marketError}</p> : null}
-                    {marketNotice ? <p role="status" className="text-sm font-semibold text-primary sm:col-span-2">{marketNotice}</p> : null}
-                    <button type="submit" disabled={marketSaving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50 sm:col-span-2"><Save size={17} /> {marketSaving ? "Enregistrement…" : "Enregistrer le statut et le stock"}</button>
+                    {marketError ? <p role="alert" className="text-sm text-red-700 md:col-span-2">{marketError}</p> : null}
+                    {marketNotice ? <p role="status" className="text-sm font-semibold text-primary md:col-span-2">{marketNotice}</p> : null}
+                    <button type="submit" disabled={marketSaving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50 md:col-span-2"><Save size={17} /> {marketSaving ? "Enregistrement…" : "Publier la récolte"}</button>
                   </form>
                 </article>
 
@@ -1323,7 +1367,7 @@ export default function Dashboard() {
 
                     </div>
 
-                    <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-7 grid gap-3 md:grid-cols-2">
 
                       <div className="rounded-xl bg-sand p-4">
 
@@ -1373,7 +1417,7 @@ export default function Dashboard() {
 
                       </div>
 
-                      <div className="rounded-xl bg-sand p-4 sm:col-span-2">
+                      <div className="rounded-xl bg-sand p-4 md:col-span-2">
 
                         <p className="text-sm text-muted">
                           Pluie prévue
@@ -1647,7 +1691,7 @@ export default function Dashboard() {
 
                   {/* DONNÉES MÉTÉO */}
 
-                  <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-8 grid gap-3 md:grid-cols-2">
 
                     <div className="rounded-xl bg-sand p-4">
 
@@ -1813,7 +1857,7 @@ export default function Dashboard() {
                       DEUX BOUTONS
                   ================================================== */}
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-6 grid gap-3 md:grid-cols-2">
 
                     {/* PRENDRE UNE PHOTO */}
 
@@ -2095,7 +2139,7 @@ export default function Dashboard() {
 
                 <form
                   onSubmit={saveProfile}
-                  className="mt-8 grid gap-4 sm:grid-cols-2"
+                  className="mt-8 grid gap-4 md:grid-cols-2"
                 >
 
                   <input
@@ -2155,7 +2199,7 @@ export default function Dashboard() {
                   />
 
                   {editingProfile && (
-                    <div className="flex flex-wrap gap-3 sm:col-span-2">
+                    <div className="flex flex-wrap gap-3 md:col-span-2">
 
                       <button
                         type="submit"
@@ -2181,12 +2225,33 @@ export default function Dashboard() {
 
                 </form>
 
+                <div className="mt-6 flex items-center justify-between gap-3 border-t border-earth pt-5 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={handleProfileLogout}
+                    className="inline-flex items-center gap-2 rounded-xl border border-earth px-3 py-3 text-sm font-semibold text-ink transition hover:bg-sand"
+                  >
+                    <LogOut size={17} aria-hidden="true" />
+                    Se déconnecter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAccountDeletion}
+                    disabled={accountDeleting}
+                    className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {accountDeleting ? "Suppression…" : "Supprimer mon compte"}
+                  </button>
+                </div>
+
               </section>
             )}
           </>
         )}
 
-        {activeSection === "buyers" && <MessagesPage embedded />}
+        {activeSection === "buyers" && (
+          <MessagesPage embedded onAccessGranted={() => setHasMessagingAccess(true)} />
+        )}
 
         {activeSection === "orders" && <TransactionsPage embedded />}
 
@@ -2321,7 +2386,11 @@ export default function Dashboard() {
                     <MessageCircle size={20} className="text-primary" />
                     Messages
                   </h3>
-                  {history.messages.length === 0 ? (
+                  {!hasMessagingAccess ? (
+                    <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
+                      L’accès aux discussions est disponible après le paiement simulé dans « Mes acheteurs ».
+                    </p>
+                  ) : history.messages.length === 0 ? (
                     <p className="rounded-2xl border border-earth bg-white p-5 text-sm text-muted">
                       Aucun message dans votre historique.
                     </p>

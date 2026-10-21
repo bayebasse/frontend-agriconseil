@@ -1,5 +1,6 @@
-export function usernameContainsDigits(username) {
-  return /\d/.test(username);
+export function isValidPersonName(name) {
+  const namePattern = /^[\p{L}]+(?:[ '\u2019-][\p{L}]+)*$/u;
+  return namePattern.test(name.trim());
 }
 
 export function isValidSenegalPhone(phone) {

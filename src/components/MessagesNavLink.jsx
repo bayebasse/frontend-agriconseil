@@ -4,10 +4,18 @@ import { NavLink } from "react-router-dom";
 
 import { buyerService } from "../services/buyerService";
 
-export default function MessagesNavLink({ label, className = "", onClick, active = false }) {
+export default function MessagesNavLink({
+  label,
+  className = "",
+  onClick,
+  active = false,
+  showUnreadCount = true,
+}) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
+    if (!showUnreadCount) return undefined;
+
     let active = true;
     const refreshUnreadCount = async () => {
       try {
@@ -29,7 +37,7 @@ export default function MessagesNavLink({ label, className = "", onClick, active
       active = false;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [showUnreadCount]);
 
   const content = (
     <>

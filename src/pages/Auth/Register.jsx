@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
 import { useAuth } from "../../contexts/AuthContext";
-import { isValidSenegalPhone, usernameContainsDigits } from "../../utils/accountValidation";
+import { isValidPersonName, isValidSenegalPhone } from "../../utils/accountValidation";
 
 export default function Register() {
   const { register } = useAuth();
@@ -20,13 +21,40 @@ export default function Register() {
   });
 
   const [error, setError] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const firstNameError = form.first_name && !isValidPersonName(form.first_name)
+    ? "Le prénom doit contenir uniquement des lettres."
+    : "";
+  const lastNameError = form.last_name && !isValidPersonName(form.last_name)
+    ? "Le nom doit contenir uniquement des lettres."
+    : "";
+  const telephoneError = form.telephone.trim() && !isValidSenegalPhone(form.telephone)
+    ? "Saisissez un numéro sénégalais valide commençant par 76, 77 ou 78 (9 chiffres, indicatif +221 facultatif)."
+    : "";
 
   async function submit(event) {
     event.preventDefault();
     setError("");
 
-    if (usernameContainsDigits(form.username)) {
-      setError("Le nom d'utilisateur ne doit pas contenir de chiffres.");
+    if (!isValidPersonName(form.first_name)) {
+      setError("Le prénom doit contenir uniquement des lettres, espaces, apostrophes ou traits d’union.");
+      return;
+    }
+
+    if (!isValidPersonName(form.last_name)) {
+      setError("Le nom doit contenir uniquement des lettres, espaces, apostrophes ou traits d’union.");
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+
+    if (form.password !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas.");
       return;
     }
 
@@ -36,8 +64,13 @@ export default function Register() {
     }
 
     try {
-      const newUser = await register(form);
-      navigate(newUser.role === "buyer" ? "/acheteur" : "/dashboard");
+      await register(form);
+      navigate("/connexion", {
+        state: {
+          registrationSuccess: "Votre compte a été créé. Connectez-vous pour accéder à votre espace.",
+          username: form.username,
+        },
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -78,33 +111,55 @@ export default function Register() {
                 </select>
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  type="text"
-                  placeholder="Prénom"
-                  value={form.first_name}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      first_name: event.target.value,
-                    })
-                  }
-                  className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none transition focus:border-primary"
-                  required
-                />
+                <div>
+                  <input
+                    type="text"
+                    name="first_name"
+                    placeholder="Prénom"
+                    autoComplete="given-name"
+                    value={form.first_name}
+                    aria-invalid={Boolean(firstNameError)}
+                    aria-describedby={firstNameError ? "first-name-error" : undefined}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        first_name: event.target.value,
+                      })
+                    }
+                    className={`w-full rounded-md border bg-white px-4 py-3 outline-none transition focus:border-primary ${firstNameError ? "border-red-600" : "border-earth"}`}
+                    required
+                  />
+                  {firstNameError && (
+                    <p id="first-name-error" role="alert" className="mt-1 text-sm text-red-700">
+                      {firstNameError}
+                    </p>
+                  )}
+                </div>
 
-                <input
-                  type="text"
-                  placeholder="Nom"
-                  value={form.last_name}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      last_name: event.target.value,
-                    })
-                  }
-                  className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none transition focus:border-primary"
-                  required
-                />
+                <div>
+                  <input
+                    type="text"
+                    name="last_name"
+                    placeholder="Nom"
+                    autoComplete="family-name"
+                    value={form.last_name}
+                    aria-invalid={Boolean(lastNameError)}
+                    aria-describedby={lastNameError ? "last-name-error" : undefined}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        last_name: event.target.value,
+                      })
+                    }
+                    className={`w-full rounded-md border bg-white px-4 py-3 outline-none transition focus:border-primary ${lastNameError ? "border-red-600" : "border-earth"}`}
+                    required
+                  />
+                  {lastNameError && (
+                    <p id="last-name-error" role="alert" className="mt-1 text-sm text-red-700">
+                      {lastNameError}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <input
@@ -121,22 +176,32 @@ export default function Register() {
                 required
               />
 
-              <input
-                type="tel"
-                name="telephone"
-                placeholder="Téléphone"
-                value={form.telephone}
-                autoComplete="tel"
-                pattern="(?:\+221[ .-]?)?(?:76|77|78)(?:[ .-]?[0-9]){7}"
-                title="Numéro sénégalais commençant par 76, 77 ou 78, avec 9 chiffres. L’indicatif +221 est facultatif."
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    telephone: event.target.value,
-                  })
-                }
-                className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none transition focus:border-primary"
-              />
+              <div>
+                <input
+                  type="tel"
+                  name="telephone"
+                  placeholder="Téléphone"
+                  value={form.telephone}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  pattern="(?:\+221[ .-]?)?(?:76|77|78)(?:[ .-]?[0-9]){7}"
+                  title="Numéro sénégalais commençant par 76, 77 ou 78, avec 9 chiffres. L’indicatif +221 est facultatif."
+                  aria-invalid={Boolean(telephoneError)}
+                  aria-describedby={telephoneError ? "telephone-error" : undefined}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      telephone: event.target.value,
+                    })
+                  }
+                  className={`w-full rounded-md border bg-white px-4 py-3 outline-none transition focus:border-primary ${telephoneError ? "border-red-600" : "border-earth"}`}
+                />
+                {telephoneError && (
+                  <p id="telephone-error" role="alert" className="mt-1 text-sm text-red-700">
+                    {telephoneError}
+                  </p>
+                )}
+              </div>
 
               <input
                 type="text"
@@ -144,8 +209,6 @@ export default function Register() {
                 placeholder="Nom d'utilisateur"
                 value={form.username}
                 autoComplete="username"
-                pattern="[^0-9]+"
-                title="Le nom d'utilisateur ne doit pas contenir de chiffres."
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -156,19 +219,58 @@ export default function Register() {
                 required
               />
 
-              <input
-                type="password"
-                placeholder="Mot de passe"
-                value={form.password}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    password: event.target.value,
-                  })
-                }
-                className="w-full rounded-md border border-earth bg-white px-4 py-3 outline-none transition focus:border-primary"
-                required
-              />
+              <label className="relative block">
+                <span className="sr-only">Mot de passe</span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Mot de passe (8 caractères minimum)"
+                  value={form.password}
+                  autoComplete="new-password"
+                  minLength={8}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      password: event.target.value,
+                    })
+                  }
+                  className="w-full rounded-md border border-earth bg-white px-4 py-3 pr-12 outline-none transition focus:border-primary"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-3 inline-flex items-center text-muted hover:text-primary"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </label>
+
+              <label className="relative block">
+                <span className="sr-only">Confirmation du mot de passe</span>
+                <input
+                  type={showConfirmation ? "text" : "password"}
+                  name="password_confirmation"
+                  placeholder="Confirmer le mot de passe"
+                  value={confirmPassword}
+                  autoComplete="new-password"
+                  minLength={8}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="w-full rounded-md border border-earth bg-white px-4 py-3 pr-12 outline-none transition focus:border-primary"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmation(!showConfirmation)}
+                  aria-label={showConfirmation ? "Masquer la confirmation" : "Afficher la confirmation"}
+                  aria-pressed={showConfirmation}
+                  className="absolute inset-y-0 right-3 inline-flex items-center text-muted hover:text-primary"
+                >
+                  {showConfirmation ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </label>
 
               <button
                 type="submit"

@@ -1,11 +1,13 @@
 import React, {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { authService } from "../services/authService";
+import { clearFarmerMessagingAccess } from "../utils/farmerMessagingAccess";
 
 const AuthContext = createContext(null);
 
@@ -36,15 +38,21 @@ export function AuthProvider({ children }) {
   }
 
   async function register(form) {
-    const authenticatedUser = await authService.register(form);
-    setUser(authenticatedUser);
-    return authenticatedUser;
+    return authService.register(form);
   }
 
-  async function logout() {
+  const logout = useCallback(async () => {
+    clearFarmerMessagingAccess(user);
     await authService.logout();
     setUser(null);
-  }
+  }, [user]);
+
+  const deleteAccount = useCallback(async () => {
+    await authService.deleteAccount();
+    clearFarmerMessagingAccess(user);
+    localStorage.removeItem("agri_token");
+    setUser(null);
+  }, [user]);
 
   const value = useMemo(
     () => ({
@@ -53,9 +61,10 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      deleteAccount,
       setUser,
     }),
-    [user, loading]
+    [user, loading, logout, deleteAccount]
   );
 
   return (

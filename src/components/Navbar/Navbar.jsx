@@ -1,6 +1,6 @@
 
 import { Link } from "react-router-dom";
-import { House, LogIn, Menu, X } from "lucide-react";
+import { Leaf, Menu, X } from "lucide-react";
 
 export default function Navbar({
   user,
@@ -13,44 +13,51 @@ export default function Navbar({
   }
 
   const linkClass =
-    "whitespace-nowrap text-sm font-medium text-white transition-colors hover:text-white/75";
+    "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white";
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#00452F] text-white">
-      <div className="flex min-h-[52px] w-full items-center px-4 sm:px-6 lg:px-[5%]">
-        {/* Menu mobile */}
+    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-primary text-white">
+      <div className="relative mx-auto flex min-h-[72px] max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+        <Link
+          to="/"
+          onClick={closeMenu}
+          aria-label="Agri-Conseil, accueil"
+          className="flex shrink-0 items-center gap-2.5 rounded-xl text-white transition-opacity hover:opacity-90"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-[#D4E7A5]">
+            <Leaf size={22} strokeWidth={2.2} aria-hidden="true" />
+          </span>
+          <span className="font-display text-lg font-bold tracking-tight sm:text-xl">
+            Agri-Conseil
+          </span>
+        </Link>
+
         <button
           type="button"
           onClick={() => onToggleMenu(!menuOpen)}
           aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={menuOpen}
-          className="ml-auto flex items-center justify-center bg-transparent p-2 text-white lg:hidden"
+          className="ml-auto flex h-11 w-11 items-center justify-center rounded-xl text-white transition hover:bg-white/10 lg:hidden"
         >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          {menuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
         </button>
 
-        {/* Navigation pleine largeur */}
         <nav
+          aria-label="Navigation principale"
           className={
             menuOpen
-              ? "absolute left-0 right-0 top-[52px] flex flex-col items-stretch gap-1 border-b border-white/10 bg-[#00452F] p-4 shadow-xl lg:static lg:flex lg:flex-1 lg:flex-row lg:items-center lg:justify-between lg:gap-5 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
-              : "hidden flex-1 items-center justify-between gap-5 lg:flex"
+              ? "absolute left-0 right-0 top-full flex flex-col items-stretch gap-1 border-b border-white/10 bg-primary px-4 pb-4 pt-2 shadow-xl sm:px-6 lg:static lg:ml-auto lg:flex lg:flex-row lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+              : "ml-auto hidden items-center gap-1 lg:flex"
           }
         >
-          {/* Accueil : icône + texte */}
           <Link
             to="/"
             onClick={closeMenu}
-            aria-label="Accueil"
-            className="flex shrink-0 items-center gap-3 rounded-md px-2 py-2 text-white transition hover:bg-white/10"
+            className={linkClass}
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-white/5">
-              <House size={21} strokeWidth={2} />
-            </span>
-            <span className={linkClass}>Accueil</span>
+            Accueil
           </Link>
 
-          {/* Comment ça marche */}
           <a
             href="/#comment-ca-marche"
             onClick={closeMenu}
@@ -59,7 +66,6 @@ export default function Navbar({
             Comment ça marche
           </a>
 
-          {/* Découvrir */}
           <a
             href="/#fonctionnalites"
             onClick={closeMenu}
@@ -68,7 +74,6 @@ export default function Navbar({
             Découvrir
           </a>
 
-          {/* Connexion / espace utilisateur */}
           {user ? (
             <>
               <Link
@@ -82,7 +87,7 @@ export default function Navbar({
               <button
                 type="button"
                 onClick={onLogout}
-                className="whitespace-nowrap rounded-md border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#00452F]"
+                className="whitespace-nowrap rounded-lg border border-white/35 px-4 py-2 text-sm font-semibold text-white transition hover:border-white hover:bg-white hover:text-primary"
               >
                 Se déconnecter
               </button>
@@ -92,16 +97,15 @@ export default function Navbar({
               <Link
                 to="/connexion"
                 onClick={closeMenu}
-                className={`inline-flex shrink-0 items-center gap-2 ${linkClass}`}
+                className={linkClass}
               >
-               {/* <LogIn size={16} /> */}
                 Se connecter
               </Link>
 
               <Link
                 to="/inscription"
                 onClick={closeMenu}
-                className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-white/50 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-[#00452F]"
+                className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-[#D4E7A5] px-4 py-2 text-sm font-bold text-[#123B2C] transition hover:bg-white"
               >
                 Créer un compte
               </Link>

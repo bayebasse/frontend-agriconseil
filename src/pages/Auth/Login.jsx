@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function Login() {
   const { login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    username: "",
+    username: location.state?.username || "",
     password: "",
   });
 
@@ -50,6 +51,11 @@ export default function Login() {
             </p>
 
             <div className="mt-5">
+              {location.state?.registrationSuccess && (
+                <p role="status" className="mb-3 border-l-4 border-primary bg-sand px-4 py-3 text-sm text-ink">
+                  {location.state.registrationSuccess}
+                </p>
+              )}
               <ErrorMessage message={error} />
             </div>
 

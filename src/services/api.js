@@ -160,20 +160,13 @@ export const api = {
   },
 
   register: async (body) => {
-    const d = await request(
+    return request(
       "/auth/register/",
       {
         method: "POST",
         body,
       }
     );
-
-    localStorage.setItem(
-      "agri_token",
-      d.token
-    );
-
-    return d;
   },
 
   logout: async () => {
@@ -329,8 +322,11 @@ export const api = {
 
   getProfile: () =>
     request("/auth/profile/"),
+
+  deleteAccount: () =>
+    request("/auth/profile/", {
+      method: "DELETE",
+    }),
 };
-
-
 
 

@@ -319,7 +319,7 @@ export default function Home() {
 
       {/* BANDEAU FINAL */}
       <section className="px-4 pb-16 sm:px-6 sm:pb-20">
-        <div className="relative mx-auto max-w-[1180px] overflow-hidden rounded-xl bg-[#00452F] px-6 py-9 sm:px-10 sm:py-11">
+        <div className="relative mx-auto max-w-[1180px] overflow-hidden rounded-xl bg-primary px-6 py-9 sm:px-10 sm:py-11">
           <div className="absolute inset-y-0 right-0 hidden w-[42%] lg:block">
             <img
               src="/images/cultures/feuillage.jpg"
@@ -327,7 +327,7 @@ export default function Home() {
               aria-hidden="true"
               className="h-full w-full object-cover opacity-40"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#00452F] to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-primary to-transparent" />
           </div>
 
           <div className="relative z-10 max-w-[650px]">

@@ -1207,7 +1207,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { adminService } from "../services/adminService";
 import { cultureService } from "../services/cultureService";
-import { isValidSenegalPhone, usernameContainsDigits } from "../utils/accountValidation";
+import { isValidSenegalPhone } from "../utils/accountValidation";
 
 const OFFICIAL_CROPS = [
   "Riz",
@@ -1510,11 +1510,6 @@ export default function AdminDashboard() {
     event.preventDefault();
 
     setError("");
-
-    if (usernameContainsDigits(farmerForm.username)) {
-      setError("Le nom d'utilisateur ne doit pas contenir de chiffres.");
-      return;
-    }
 
     if (!isValidSenegalPhone(farmerForm.telephone)) {
       setError("Saisissez un numéro sénégalais valide commençant par 76, 77 ou 78 (9 chiffres, indicatif +221 facultatif).");

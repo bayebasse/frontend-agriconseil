@@ -58,15 +58,15 @@ export default function ChatbotLauncher({
       {open && (
         <section
           aria-label="Chatbot Agri-Conseil"
-          className="fixed z-[9999] flex flex-col overflow-hidden rounded-2xl border border-[#D8E5DA] bg-white shadow-[0_12px_40px_rgba(0,69,47,0.24)]"
+          className="fixed z-[9999] flex flex-col overflow-hidden rounded-[2rem] border border-[#D8E5DA] bg-white shadow-[0_12px_40px_rgba(0,69,47,0.24)]"
           style={{
             position: "fixed",
             display: "flex",
             flexDirection: "column",
             right: "20px",
             bottom: "6rem",
-            width: "min(calc(100vw - 2rem), 390px)",
-            height: "min(70vh, 560px)",
+            width: "min(calc(100vw - 2rem), 300px)",
+            height: "min(65vh, 500px)",
             maxHeight: "calc(100vh - 8rem)",
             zIndex: 9999,
           }}
@@ -123,11 +123,15 @@ export default function ChatbotLauncher({
         onClick={toggle}
         aria-label={open ? "Fermer le chatbot" : "Ouvrir le chatbot"}
         aria-expanded={open}
-        className="fixed bottom-5 right-5 z-[60] flex h-[62px] w-[118px] items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#036A38] shadow-[0_5px_18px_rgba(0,69,47,0.25)] transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#036A38] focus:ring-offset-2"
+        className="fixed bottom-20 right-5 z-[60] flex h-[62px] w-[118px] items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#036A38] shadow-[0_5px_18px_rgba(0,69,47,0.25)] transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#036A38] focus:ring-offset-2 lg:bottom-5"
         style={{ backgroundImage: `url("${imageSrc}")`, backgroundSize: "cover", backgroundPosition: "center" }}
       >
         <span className="absolute inset-0 bg-[#00452F]/35" />
-        <span className="relative z-10 rounded-full bg-[#00452F]/75 px-3 py-1 text-xs font-bold text-white">{open ? "Fermer" : "question ?"}</span>
+        {open && (
+          <span className="relative z-10 rounded-full bg-[#00452F]/75 px-3 py-1 text-xs font-bold text-white">
+            Fermer
+          </span>
+        )}
       </button>
     </>
   );

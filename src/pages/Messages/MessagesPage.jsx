@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, LoaderCircle, Mic, MicOff, Send, Square } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  LoaderCircle,
+  LockKeyhole,
+  Mic,
+  MicOff,
+  Send,
+  Square,
+} from "lucide-react";
 
 import ErrorMessage from "../../components/ErrorMessage/ErrorMessage";
 import { useAuth } from "../../contexts/AuthContext";
 import { buyerService } from "../../services/buyerService";
+import {
+  grantFarmerMessagingAccess,
+  hasFarmerMessagingAccess,
+} from "../../utils/farmerMessagingAccess";
+import { isValidSenegalPhone } from "../../utils/accountValidation";
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
@@ -32,10 +46,17 @@ function chooseAudioType() {
     .find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
-export default function MessagesPage({ embedded = false }) {
+export default function MessagesPage({ embedded = false, onAccessGranted }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { conversationId: routeConversationId } = useParams();
+  const [hasPaidAccess, setHasPaidAccess] = useState(
+    () => user.role !== "farmer" || hasFarmerMessagingAccess(user)
+  );
+  const [paymentMethod, setPaymentMethod] = useState("wave");
+  const [paymentPhone, setPaymentPhone] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const canViewMessages = user.role !== "farmer" || hasPaidAccess;
   const [embeddedConversationId, setEmbeddedConversationId] = useState(null);
   const conversationId = embedded ? embeddedConversationId : routeConversationId;
   const [conversations, setConversations] = useState([]);
@@ -53,6 +74,7 @@ export default function MessagesPage({ embedded = false }) {
   const chunksRef = useRef([]);
 
   const refreshConversations = useCallback(async () => {
+    if (!canViewMessages) return;
     try {
       const data = await buyerService.getConversations();
       setConversations(Array.isArray(data) ? data : []);
@@ -61,9 +83,10 @@ export default function MessagesPage({ embedded = false }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canViewMessages]);
 
   const refreshMessages = useCallback(async () => {
+    if (!canViewMessages) return;
     if (!conversationId) {
       setMessages([]);
       return;
@@ -76,20 +99,22 @@ export default function MessagesPage({ embedded = false }) {
     } catch (loadError) {
       setError(loadError.message || "Impossible de charger les messages.");
     }
-  }, [conversationId, refreshConversations]);
+  }, [canViewMessages, conversationId, refreshConversations]);
 
   useEffect(() => {
+    if (!canViewMessages) return undefined;
     refreshConversations();
     const interval = window.setInterval(refreshConversations, 20_000);
     return () => window.clearInterval(interval);
-  }, [refreshConversations]);
+  }, [canViewMessages, refreshConversations]);
 
   useEffect(() => {
+    if (!canViewMessages) return undefined;
     refreshMessages();
     if (!conversationId) return undefined;
     const interval = window.setInterval(refreshMessages, 8_000);
     return () => window.clearInterval(interval);
-  }, [refreshMessages, conversationId]);
+  }, [canViewMessages, refreshMessages, conversationId]);
 
   const audioIds = useMemo(
     () => messages.filter((message) => message.has_audio).map((message) => message.id).join(","),
@@ -216,6 +241,139 @@ export default function MessagesPage({ embedded = false }) {
     navigate("/messages");
   }
 
+  function simulatePayment(event) {
+    event.preventDefault();
+    setPaymentError("");
+    if (!isValidSenegalPhone(paymentPhone)) {
+      setPaymentError("Saisissez un numéro sénégalais valide (ex. 77 123 45 67).");
+      return;
+    }
+    try {
+      grantFarmerMessagingAccess(user);
+      setHasPaidAccess(true);
+      onAccessGranted?.();
+    } catch (saveError) {
+      setPaymentError(saveError.message || "Impossible d’enregistrer le paiement simulé.");
+    }
+  }
+
+  if (user.role === "farmer" && !hasPaidAccess) {
+    return (
+      <main className={embedded ? "space-y-5" : "min-h-screen bg-sand"}>
+        <section className="relative mx-auto max-w-2xl overflow-hidden rounded-2xl border border-earth bg-white shadow-[0_14px_40px_rgba(18,65,43,0.10)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-primary via-emerald-400 to-lime-300" />
+          <div className="px-4 py-5 sm:px-7 sm:py-6">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-soft text-primary">
+              <LockKeyhole size={22} aria-hidden="true" />
+            </div>
+            <div className="mx-auto mt-3 max-w-lg text-center">
+              <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+                Espace agriculteur · accès aux discussions
+              </p>
+              <h1 className="mt-1 font-display text-2xl font-bold text-ink sm:text-3xl">
+                Accédez aux discussions
+              </h1>
+            </div>
+
+            <div className="mx-auto mt-4 flex max-w-sm items-center justify-between rounded-xl bg-sand px-4 py-3">
+              <div>
+                <p className="text-sm font-extrabold text-ink">Paiement pour 1 mois</p>
+              </div>
+              <p className="font-display text-xl font-bold text-primary">10 000 <span className="text-xs font-bold">FCFA</span></p>
+            </div>
+
+            <fieldset className="mx-auto mt-4 max-w-lg">
+              <legend className="mb-2 text-sm font-bold text-ink">Choisissez votre moyen de paiement</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod("wave");
+                    setPaymentError("");
+                  }}
+                  aria-pressed={paymentMethod === "wave"}
+                  className={`flex items-center gap-2.5 rounded-xl border-2 p-3 text-left transition ${
+                    paymentMethod === "wave"
+                      ? "border-sky-500 bg-sky-50 ring-2 ring-sky-100"
+                      : "border-earth bg-white hover:border-sky-300"
+                  }`}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b75d0] text-lg font-black text-white" aria-hidden="true">
+                    w
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold text-ink">Wave</span>
+                    <span className="block text-xs text-muted">Paiement mobile</span>
+                  </span>
+                  {paymentMethod === "wave" ? <Check size={17} className="text-sky-600" aria-hidden="true" /> : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod("orange-money");
+                    setPaymentError("");
+                  }}
+                  aria-pressed={paymentMethod === "orange-money"}
+                  className={`flex items-center gap-2.5 rounded-xl border-2 p-3 text-left transition ${
+                    paymentMethod === "orange-money"
+                      ? "border-orange-500 bg-orange-50 ring-2 ring-orange-100"
+                      : "border-earth bg-white hover:border-orange-300"
+                  }`}
+                >
+                  <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-[#f58220] text-[9px] font-black leading-none text-white" aria-hidden="true">
+                    <span className="text-sm">OM</span>
+                    <span className="mt-0.5">ORANGE</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold text-ink">Orange Money</span>
+                    <span className="block text-xs text-muted">Paiement mobile</span>
+                  </span>
+                  {paymentMethod === "orange-money" ? <Check size={17} className="text-orange-600" aria-hidden="true" /> : null}
+                </button>
+              </div>
+            </fieldset>
+
+            <form onSubmit={simulatePayment} className="mx-auto mt-4 max-w-lg space-y-3">
+              <label htmlFor="payment-phone" className="block text-sm font-bold text-ink">
+                Numéro {paymentMethod === "wave" ? "Wave" : "Orange Money"}
+                <input
+                  id="payment-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  value={paymentPhone}
+                  onChange={(event) => {
+                    setPaymentPhone(event.target.value);
+                    setPaymentError("");
+                  }}
+                  placeholder="Ex. 77 123 45 67"
+                  aria-describedby="payment-phone-help"
+                  className="mt-1.5 w-full rounded-xl border border-earth bg-white px-3.5 py-2.5 font-normal text-ink outline-none transition placeholder:text-muted/70 focus:border-primary focus:ring-4 focus:ring-primary/10"
+                />
+              </label>
+              <p id="payment-phone-help" className="-mt-2 text-xs text-muted">
+                Numéro à utiliser pour le paiement de 10 000 FCFA.
+              </p>
+              {paymentError ? (
+                <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {paymentError}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-white shadow-md shadow-primary/20 transition hover:bg-primary/90 focus:outline-none focus:ring-4 focus:ring-primary/20"
+              >
+                <Check size={19} aria-hidden="true" />
+                Valider
+              </button>
+            </form>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={embedded ? "space-y-5" : "min-h-screen bg-sand"}>
       {!embedded ? <header className="flex items-center justify-between gap-4 bg-primary px-5 py-4 text-white sm:px-8">
@@ -225,7 +383,9 @@ export default function MessagesPage({ embedded = false }) {
         </div>
         <div className="flex items-center gap-3">
           <Link to={user.role === "buyer" ? "/acheteur" : "/dashboard"} className="rounded-xl bg-white/10 px-4 py-2.5 font-semibold">Mon espace</Link>
-          <button type="button" onClick={handleLogout} className="rounded-xl bg-white px-4 py-2.5 font-semibold text-primary">Se déconnecter</button>
+          {user.role !== "farmer" && (
+            <button type="button" onClick={handleLogout} className="rounded-xl bg-white px-4 py-2.5 font-semibold text-primary">Se déconnecter</button>
+          )}
         </div>
       </header> : null}
 

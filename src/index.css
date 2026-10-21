@@ -109,3 +109,52 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+@media (max-width: 639px) {
+  .farmer-dashboard {
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .farmer-dashboard > div {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    padding-inline: 1rem;
+  }
+
+  .farmer-dashboard article,
+  .farmer-dashboard section {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .farmer-dashboard .grid > *,
+  .farmer-dashboard form > * {
+    min-width: 0;
+  }
+
+  .farmer-dashboard article[class*="p-6"],
+  .farmer-dashboard article[class*="p-8"],
+  .farmer-dashboard section[class*="p-6"],
+  .farmer-dashboard section[class*="p-8"] {
+    padding: 1rem;
+    border-radius: 1.25rem;
+  }
+
+  .farmer-dashboard input,
+  .farmer-dashboard select,
+  .farmer-dashboard textarea {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .farmer-dashboard h1,
+  .farmer-dashboard h2,
+  .farmer-dashboard h3,
+  .farmer-dashboard p {
+    overflow-wrap: anywhere;
+  }
+}

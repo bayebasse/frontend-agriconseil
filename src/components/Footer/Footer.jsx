@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer
       id="footer"
-      className="scroll-mt-24 bg-[#002719] px-5 pt-10 text-white sm:px-8 lg:px-[6%] lg:pt-12"
+      className="scroll-mt-24 bg-primary px-5 pt-10 text-white sm:px-8 lg:px-[6%] lg:pt-12"
     >
       <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-8 pb-9 sm:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-10 lg:pb-10">
 

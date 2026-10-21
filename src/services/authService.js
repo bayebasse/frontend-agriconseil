@@ -15,5 +15,7 @@ export const authService = {
 
 getProfile: () =>
   api.getProfile(),
-};
 
+deleteAccount: () =>
+  api.deleteAccount(),
+};
