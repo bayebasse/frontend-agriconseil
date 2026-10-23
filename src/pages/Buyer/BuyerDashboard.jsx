@@ -11,6 +11,7 @@ import { api } from "../../services/api";
 import MessagesNavLink from "../../components/MessagesNavLink";
 import CropTransactionForm from "./CropTransactionForm";
 import { getMarketAction } from "../../utils/marketActions";
+import { getCropImageUrl } from "../../utils/cropImages";
 
 const STATUS_LABELS = {
   in_progress: "En cours",
@@ -196,7 +197,11 @@ export default function BuyerDashboard() {
                       <p className="mt-1 text-sm text-muted">{crop.agriculteur_nom_complet || "Agriculteur non renseigné"}</p>
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted"><Phone size={14} />{crop.agriculteur_telephone || "Téléphone non renseigné"}</p>
                     </div>
-                    <span className="rounded-xl bg-soft p-3 text-primary"><Leaf size={22} /></span>
+                    {getCropImageUrl(crop.culture_nom) ? (
+                      <img src={getCropImageUrl(crop.culture_nom)} alt={crop.culture_nom} className="h-14 w-14 rounded-xl object-cover" />
+                    ) : (
+                      <span className="rounded-xl bg-soft p-3 text-primary"><Leaf size={22} /></span>
+                    )}
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <p className="rounded-xl bg-sand p-3 text-sm"><span className="block text-muted">Production totale estimée · indicative</span><strong>{formatQuantity(crop.recolte_estimee_kg)}</strong></p>

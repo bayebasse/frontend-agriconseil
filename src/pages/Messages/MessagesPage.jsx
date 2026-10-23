@@ -298,9 +298,11 @@ export default function MessagesPage({ embedded = false, onAccessGranted }) {
                       : "border-earth bg-white hover:border-sky-300"
                   }`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b75d0] text-lg font-black text-white" aria-hidden="true">
-                    w
-                  </span>
+                  <img
+                    src="/images/wave.png"
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-xl object-contain"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block font-bold text-ink">Wave</span>
                     <span className="block text-xs text-muted">Paiement mobile</span>
@@ -320,10 +322,11 @@ export default function MessagesPage({ embedded = false, onAccessGranted }) {
                       : "border-earth bg-white hover:border-orange-300"
                   }`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-[#f58220] text-[9px] font-black leading-none text-white" aria-hidden="true">
-                    <span className="text-sm">OM</span>
-                    <span className="mt-0.5">ORANGE</span>
-                  </span>
+                  <img
+                    src="/images/orange-money.png"
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-xl object-contain"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block font-bold text-ink">Orange Money</span>
                     <span className="block text-xs text-muted">Paiement mobile</span>

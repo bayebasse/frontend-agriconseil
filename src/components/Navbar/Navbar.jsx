@@ -1,6 +1,6 @@
 
 import { Link } from "react-router-dom";
-import { Leaf, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 export default function Navbar({
   user,
@@ -24,9 +24,6 @@ export default function Navbar({
           aria-label="Agri-Conseil, accueil"
           className="flex shrink-0 items-center gap-2.5 rounded-xl text-white transition-opacity hover:opacity-90"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-[#D4E7A5]">
-            <Leaf size={22} strokeWidth={2.2} aria-hidden="true" />
-          </span>
           <span className="font-display text-lg font-bold tracking-tight sm:text-xl">
             Agri-Conseil
           </span>

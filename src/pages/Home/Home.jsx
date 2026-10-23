@@ -2,8 +2,7 @@ import { useState } from "react";
 import {
   CalendarDays,
   Camera,
-  CloudSun,
-  ArrowRight,
+  Wheat,
   ChevronDown,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -15,9 +14,9 @@ const features = [
     text: "Suivez automatiquement les étapes de vos cultures et les opérations à réaliser au bon moment.",
   },
   {
-    icon: CloudSun,
-    title: "Météo locale",
-    text: "Consultez les prévisions météorologiques pour mieux anticiper les conditions dans votre région.",
+    icon: Wheat,
+    title: "Publication Récolte",
+    text: "Publiez vos récoltes disponibles pour les présenter aux acheteurs et faciliter leur mise en vente.",
   },
   {
     icon: Camera,
@@ -44,6 +43,7 @@ const steps = [
   "Enregistrez vos cultures",
   "Suivez votre calendrier",
   "Analysez vos plantes avec l’IA",
+  "Publiez votre récolte",
 ];
 
 export default function Home() {
@@ -78,15 +78,12 @@ export default function Home() {
           {/* Texte à gauche */}
           <div className="max-w-[640px]">
             <h1 className="font-display text-[36px] font-bold leading-[1.08] tracking-[-0.035em] text-black sm:text-[44px] lg:text-[46px]">
-              Ressources en agriculture urbaine
+              Ressources en agriculture au Sénégal
             </h1>
 
             <p className="mt-6 text-base leading-7 text-black sm:text-lg sm:leading-8">
-              L’agriculture urbaine transforme la production, la distribution
-              et l’accès à l’alimentation dans les villes. Que vous cultiviez
-              sur un toit, dans un jardin communautaire ou grâce à
-              l’agriculture verticale, Agri-Conseil vous propose des outils et
-              des conseils pour vous accompagner.
+              Agri-Conseil vous accompagne avec un calendrier agricole, la
+              publication de vos récoltes et l’analyse de vos plantes.
             </p>
           </div>
 
@@ -113,7 +110,7 @@ export default function Home() {
         className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
       >
         <div className="mx-auto max-w-[1180px]">
-          <div className="mb-10 max-w-[760px]">
+          <div className="mx-auto mb-10 max-w-[760px] text-center">
             <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
               Les fonctionnalités
             </span>
@@ -123,7 +120,7 @@ export default function Home() {
             </h2>
 
             <p className="mt-4 text-base leading-7 text-[#475569]">
-              Des outils simples pour mieux organiser et suivre vos cultures.
+              Connectez-vous pour découvrir
             </p>
           </div>
 
@@ -150,7 +147,6 @@ export default function Home() {
                   className="mt-5 inline-flex items-center gap-2 font-bold text-[#036A38] transition hover:text-[#0B7950]"
                 >
                   Découvrir
-                  <ArrowRight size={17} />
                 </Link>
               </article>
             ))}
@@ -164,8 +160,8 @@ export default function Home() {
         className="scroll-mt-24 bg-[#F3F8F2] px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
       >
         <div className="mx-auto max-w-[1180px]">
-          <div className="mb-9 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
+          <div className="relative mb-9 flex flex-col items-center gap-4">
+            <div className="w-full text-center">
               <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
                 Agriculture au Sénégal
               </span>
@@ -174,13 +170,12 @@ export default function Home() {
                 Nos 10 cultures
               </h2>
 
-              <p className="mt-3 max-w-[620px] text-base leading-7 text-[#475569]">
-                Découvrez les cultures prises en charge par Agri-Conseil et
-                accédez à des outils pour mieux les suivre.
+              <p className="mx-auto mt-3 max-w-[620px] text-base leading-7 text-[#475569]">
+                Vous avez une culture de ce genre ? Connectez-vous.
               </p>
             </div>
 
-            <span className="inline-flex w-fit items-center rounded-full border border-[#DCE9DE] bg-white px-4 py-2 text-sm font-semibold text-[#036A38]">
+            <span className="inline-flex w-fit items-center rounded-full border border-[#DCE9DE] bg-white px-4 py-2 text-sm font-semibold text-[#036A38] sm:absolute sm:right-0 sm:top-0">
               {visibleCultures} sur 10 cultures
             </span>
           </div>
@@ -268,22 +263,20 @@ export default function Home() {
         className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-[84px]"
       >
         <div className="mx-auto max-w-[1180px]">
-          <div className="mb-10 max-w-[760px]">
+          <div className="mx-auto mb-10 max-w-[760px] text-center">
             <span className="text-xs font-extrabold uppercase tracking-[0.13em] text-[#036A38]">
-              Simple en quatre étapes
+              Simple en cinq étapes
             </span>
 
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.035em] text-[#123D2B] sm:text-4xl lg:text-[44px]">
               Comment ça marche ?
             </h2>
-
             <p className="mt-3 text-base leading-7 text-[#475569]">
-              Quelques étapes simples pour accéder aux outils nécessaires au
-              suivi de vos cultures.
+              Quelques étapes simples pour le suivi de vos cultures.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-5">
             {steps.map((title, index) => (
               <article key={title} className="relative">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#036A38] text-sm font-bold text-white">
@@ -301,16 +294,10 @@ export default function Home() {
                       "Renseignez votre localisation et les informations de vos cultures.",
                       "Consultez les étapes prévues et les informations météo.",
                       "Importez une photo pour obtenir une analyse et des conseils.",
+                      "Publiez vos récoltes disponibles pour les présenter aux acheteurs.",
                     ][index]
                   }
                 </p>
-
-                {index < 3 && (
-                  <ArrowRight
-                    size={21}
-                    className="absolute right-0 top-3 hidden text-[#0B7950]/50 lg:block"
-                  />
-                )}
               </article>
             ))}
           </div>
@@ -349,7 +336,6 @@ export default function Home() {
               className="mt-6 inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 font-bold text-[#036A38] transition hover:bg-[#E5F4E9]"
             >
               Créer mon compte
-              <ArrowRight size={18} />
             </Link>
           </div>
         </div>

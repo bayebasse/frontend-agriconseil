@@ -32,11 +32,11 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-[72vh] bg-sand px-3 py-8 sm:px-5 lg:py-[70px]">
-      <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[10px] border border-earth bg-white shadow-[0_12px_35px_rgba(31,31,27,0.06)] lg:grid-cols-2">
+    <main className="flex min-h-screen flex-col items-start bg-sand p-0">
+      <div className="mx-0 grid w-full max-w-7xl overflow-hidden rounded-[10px] border border-earth bg-white shadow-[0_12px_35px_rgba(31,31,27,0.06)] lg:grid-cols-2">
         
         {/* GAUCHE : FORMULAIRE */}
-        <section className="flex items-center justify-center p-6 sm:p-10 lg:p-14">
+        <section className="flex items-start justify-start p-6 sm:p-10 lg:p-14">
           <div className="w-full max-w-[500px]">
             <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
               Agri-Conseil
@@ -120,6 +120,14 @@ export default function Login() {
             className="absolute inset-0 h-full w-full object-cover"
           />
         </section>
+      </div>
+      <div className="mt-auto mb-8 ml-4 pt-8">
+        <Link
+          to="/"
+          className="inline-flex items-center rounded-md border border-primary px-4 py-2 font-semibold text-primary transition hover:bg-primary hover:text-white"
+        >
+          Retour
+        </Link>
       </div>
     </main>
   );

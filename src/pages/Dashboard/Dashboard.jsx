@@ -42,6 +42,7 @@ import { transactionService } from "../../services/transactionService";
 import { getPastHarvestDate } from "../../utils/harvestHistory";
 import { isValidSenegalPhone } from "../../utils/accountValidation";
 import { hasFarmerMessagingAccess } from "../../utils/farmerMessagingAccess";
+import { getCropImageUrl } from "../../utils/cropImages";
 
 function getCultureName(culture) {
   return (
@@ -196,9 +197,9 @@ function YieldPredictionCard({ prediction, loading, error }) {
         <>
           {prediction.rendement_estime_kg_ha != null ? (
             <div className="mt-4 rounded-xl bg-sand p-4 text-ink">
-              <p className="text-sm text-muted">
-                {prediction.quantite_totale_estimee_kg != null ? "Récolte estimée" : "Rendement estimé"}
-              </p>
+              {prediction.quantite_totale_estimee_kg != null ? (
+                <p className="text-sm text-muted">Récolte estimée</p>
+              ) : null}
               <p className="mt-1 text-2xl font-extrabold text-primary">
                 {prediction.quantite_totale_estimee_kg != null
                   ? formatHarvestQuantity(prediction.quantite_totale_estimee_kg)
@@ -208,54 +209,13 @@ function YieldPredictionCard({ prediction, loading, error }) {
                 <p className="mt-1 text-sm">
                   Soit environ {formatKg(prediction.rendement_estime_kg_ha)} kg par hectare.
                 </p>
-              ) : (
-                <p className="mt-1 text-sm">
-                  Rendement indicatif par hectare; précisez l’unité de superficie pour obtenir le total.
-                </p>
-              )}
-              {prediction.recolte_prevue?.date_debut ? (
-                <p className="mt-2 text-sm">
-                  Période estimée : {formatDate(prediction.recolte_prevue.date_debut)}
-                  {prediction.recolte_prevue.date_fin && prediction.recolte_prevue.date_fin !== prediction.recolte_prevue.date_debut
-                    ? ` – ${formatDate(prediction.recolte_prevue.date_fin)}`
-                    : ""}
-                </p>
               ) : null}
             </div>
           ) : (
             <p className="mt-4 rounded-xl bg-sand p-4 text-sm text-ink">
-              {prediction.estimation_ia?.raison === "cle_api_absente"
-                  ? "L’estimation est indisponible : la clé Gemini n’est pas configurée dans le backend."
-                  : prediction.estimation_ia?.raison === "fournisseur_indisponible"
-                    ? "Le service d’estimation est momentanément indisponible. Réessayez plus tard."
-                    : prediction.estimation_ia?.raison === "reponse_modele_invalide"
-                      ? "Le modèle n’a pas fourni d’estimation exploitable. Réessayez plus tard."
-                      : prediction.estimation_ia?.raison === "sources_introuvables"
-                        ? "Aucune source agronomique fiable n’a été trouvée pour cette estimation."
-                      : "Pas assez de données pour estimer cette récolte."}
+              Aucune référence de rendement documentée n’est disponible pour cette culture.
             </p>
           )}
-          {prediction.explication_prevision ? (
-            <p className="mt-3 text-sm text-muted">{prediction.explication_prevision}</p>
-          ) : null}
-          {prediction.estimation_ia?.sources?.length ? (
-            <div className="mt-3 text-xs text-muted">
-              <span className="font-semibold">Sources consultées :</span>{" "}
-              {prediction.estimation_ia.sources.map((source, index) => (
-                <span key={source.url}>
-                  {index ? " · " : ""}
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-                  >
-                    {source.titre || "Source agronomique"}
-                  </a>
-                </span>
-              ))}
-            </div>
-          ) : null}
           {prediction.avancement_cycle ? (
             <div className="mt-5">
               <div className="mb-2 flex items-center justify-between text-sm">
@@ -611,8 +571,11 @@ export default function Dashboard() {
       setSelectedCulture(null);
     } else if (filteredCultures.length && !filteredCultures.some((culture) => culture.id === selectedCulture?.id)) {
       setSelectedCulture(filteredCultures[0]);
+      if (activeSection === "cultures") {
+        setActiveSection("overview");
+      }
     }
-  }, [filteredCultures, selectedCulture?.id]);
+  }, [activeSection, filteredCultures, selectedCulture?.id]);
 
   /*
    * Prochaine opération provenant directement
@@ -1114,9 +1077,17 @@ export default function Dashboard() {
 
                         <div className="flex items-start justify-between gap-4">
 
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-sm">
-                            <Leaf size={21} />
-                          </div>
+                          {getCropImageUrl(getCultureName(culture)) ? (
+                            <img
+                              src={getCropImageUrl(getCultureName(culture))}
+                              alt={getCultureName(culture)}
+                              className="h-11 w-11 rounded-xl object-cover shadow-sm"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-sm">
+                              <Leaf size={21} />
+                            </div>
+                          )}
 
                           {active && (
                             <span className="rounded-full bg-primary px-3 py-1 text-xs font-bold text-white">
@@ -1182,9 +1153,17 @@ export default function Dashboard() {
 
                     <div className="flex items-center gap-3">
 
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary">
-                        <Leaf size={24} />
-                      </div>
+                      {getCropImageUrl(selectedCultureName) ? (
+                        <img
+                          src={getCropImageUrl(selectedCultureName)}
+                          alt={selectedCultureName}
+                          className="h-12 w-12 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary">
+                          <Leaf size={24} />
+                        </div>
+                      )}
 
                       <div>
                         <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">
@@ -1247,7 +1226,15 @@ export default function Dashboard() {
 
                 <article className="rounded-[24px] border border-earth bg-white p-6 shadow-sm sm:p-8">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary"><ShoppingBag size={23} /></div>
+                    {getCropImageUrl(selectedCultureName) ? (
+                      <img
+                        src={getCropImageUrl(selectedCultureName)}
+                        alt={selectedCultureName}
+                        className="h-12 w-12 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-soft text-primary"><ShoppingBag size={23} /></div>
+                    )}
                     <div><span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">Vente et récolte</span><h2 className="mt-1 text-2xl font-bold">Publier cette récolte</h2></div>
                   </div>
                   <form onSubmit={saveMarketData} className="mt-5 grid gap-4 md:grid-cols-2">
@@ -1277,9 +1264,17 @@ export default function Dashboard() {
 
                     <div className="flex items-center gap-3">
 
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-primary">
-                        <CalendarDays size={24} />
-                      </div>
+                      {getCropImageUrl(selectedCultureName) ? (
+                        <img
+                          src={getCropImageUrl(selectedCultureName)}
+                          alt={selectedCultureName}
+                          className="h-12 w-12 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-primary">
+                          <CalendarDays size={24} />
+                        </div>
+                      )}
 
                       <div>
                         <span className="text-xs font-extrabold uppercase tracking-[0.11em] text-primary">

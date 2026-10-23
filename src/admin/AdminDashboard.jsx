@@ -1208,6 +1208,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { adminService } from "../services/adminService";
 import { cultureService } from "../services/cultureService";
 import { isValidSenegalPhone } from "../utils/accountValidation";
+import { getCropImageUrl } from "../utils/cropImages";
 
 const OFFICIAL_CROPS = [
   "Riz",
@@ -2394,9 +2395,14 @@ export default function AdminDashboard() {
                         {filteredOrders.map((order) => (
                           <article key={order.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
-                              <div>
+                              <div className="flex min-w-0 items-center gap-3">
+                                {getCropImageUrl(order.culture_nom) ? (
+                                  <img src={getCropImageUrl(order.culture_nom)} alt={order.culture_nom} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                                ) : null}
+                                <div>
                                 <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Commande n° {order.id}</span>
                                 <h3 className="mt-1 text-xl font-bold">{order.culture_nom || "Culture non renseignée"}</h3>
+                                </div>
                               </div>
                               <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">{getTransactionStatusLabel(order.statut)}</span>
                             </div>
@@ -2426,9 +2432,14 @@ export default function AdminDashboard() {
                         {filteredReservations.map((reservation) => (
                           <article key={reservation.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
-                              <div>
+                              <div className="flex min-w-0 items-center gap-3">
+                                {getCropImageUrl(reservation.culture_nom) ? (
+                                  <img src={getCropImageUrl(reservation.culture_nom)} alt={reservation.culture_nom} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                                ) : null}
+                                <div>
                                 <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Réservation n° {reservation.id}</span>
                                 <h3 className="mt-1 text-xl font-bold">{reservation.culture_nom || "Culture non renseignée"}</h3>
+                                </div>
                               </div>
                               <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-primary">{getTransactionStatusLabel(reservation.statut)}</span>
                             </div>
@@ -2520,12 +2531,16 @@ export default function AdminDashboard() {
                       {filteredCalendars.map((calendar) => (
                         <article key={calendar.id} className="rounded-[24px] border border-earth bg-white p-6 shadow-sm">
                           <div className="flex items-start justify-between gap-3">
-                            <div>
+                            <div className="flex min-w-0 items-center gap-3">
+                              {getCropImageUrl(calendar.culture_nom) ? (
+                                <img src={getCropImageUrl(calendar.culture_nom)} alt={calendar.culture_nom} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                              ) : null}
+                              <div>
                               <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-primary">Calendrier agricole</span>
                               <h2 className="mt-1 text-xl font-bold">{calendar.culture_nom}</h2>
                               <p className="mt-1 text-sm text-muted">Agriculteur : {calendar.farmer_name}</p>
+                              </div>
                             </div>
-                            <CalendarDays size={22} className="shrink-0 text-primary" />
                           </div>
                           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                             <p className="rounded-xl bg-sand p-3">Localisation : <strong>{[calendar.commune_nom, calendar.departement_nom, calendar.region_nom].filter(Boolean).join(", ") || "Non renseignée"}</strong></p>

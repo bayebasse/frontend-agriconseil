@@ -11,7 +11,7 @@ export default function Footer() {
         {/* Présentation */}
         <div>
           <h3 className="text-lg font-bold tracking-tight text-white">
-            Agriculture &amp; conseils
+            Agriculture et conseils
           </h3>
 
           <p className="mt-4 max-w-[340px] text-sm leading-6 text-white/75">
@@ -93,7 +93,7 @@ export default function Footer() {
           <ul className="space-y-2.5 text-sm leading-6 text-white/75">
             <li>
               <Link
-                to="/login"
+                to="/connexion"
                 className="transition hover:text-white"
               >
                 Se connecter
@@ -101,10 +101,18 @@ export default function Footer() {
             </li>
             <li>
               <Link
-                to="/register"
+                to="/inscription"
                 className="transition hover:text-white"
               >
                 Créer un compte
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/inscription"
+                className="transition hover:text-white"
+              >
+                Publier votre récolte
               </Link>
             </li>
           </ul>

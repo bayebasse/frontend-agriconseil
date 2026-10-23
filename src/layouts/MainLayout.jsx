@@ -25,6 +25,7 @@ export default function MainLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const isAuthPage = ["/connexion", "/inscription"].includes(location.pathname);
   const isWorkspace = ["/dashboard", "/admin", "/acheteur", "/messages", "/transactions"].some((path) =>
     location.pathname.startsWith(path)
   ) || (user?.role === "farmer" && location.pathname.startsWith("/culture/nouvelle"));
@@ -77,7 +78,7 @@ export default function MainLayout({ children }) {
                   className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-ink transition hover:bg-soft hover:text-primary lg:px-4"
                 >
                   <UserRound size={18} aria-hidden="true" />
-                  <span>Mon profil</span>
+                  <span className="hidden lg:inline">Mon profil</span>
                 </button>
                 <button
                   type="button"
@@ -120,7 +121,7 @@ export default function MainLayout({ children }) {
         </>
       )}
 
-      {!isWorkspace ? (
+      {!isWorkspace && !isAuthPage ? (
         <Navbar
           user={user}
           menuOpen={menuOpen}
@@ -131,7 +132,7 @@ export default function MainLayout({ children }) {
 
       {children}
 
-      {!isWorkspace ? <Footer /> : null}
+      {!isWorkspace && !isAuthPage ? <Footer /> : null}
     </div>
   );
 }
